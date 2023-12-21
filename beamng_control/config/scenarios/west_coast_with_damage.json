@@ -1,0 +1,22 @@
+{
+  "version": 0.1,
+  "level": "west_coast_usa",
+  "name": "road_network",
+  "mode": "None",
+  "network_vizualization": "on",
+  "vehicles": [
+    {
+      "name": "ego_vehicle",
+      "model": "etk800",
+      "position": [34,31,119.775],
+      "rotation": [0, 0, 0, 1],
+      "sensors_classical": [
+        {
+          "name":"damage0",
+          "type":"Damage"
+        }
+      ]
+    }
+  ]
+}
+

@@ -1,0 +1,35 @@
+{
+  "version": 0.1,
+  "level": "Utah",
+  "name": "road_network",
+  "mode": "None",
+  "network_vizualization": "on",
+  "vehicles": [
+    {
+      "name": "ego_vehicle",
+      "model": "pickup",
+      "position": [537.24, 25.95, 142.16],
+      "rotation": [0, 0, 0, 1],
+      "sensors_automation": [
+        {
+          "name": "front_cam_left",
+          "type": "Camera.default",
+          "position": [0.5, -2.3, 1],
+          "rotation": [0, 0]
+        },
+        {
+          "name": "front_cam_right",
+          "type": "Camera.default",
+          "position": [-0.5, -2.3, 1],
+          "rotation": [0, 0]
+        },
+        {
+          "name": "lidar0",
+          "type": "Lidar.default",
+          "position": [0, 0, 2.0],
+          "rotation": [0, 0]
+        }
+      ]
+    }
+  ]
+}

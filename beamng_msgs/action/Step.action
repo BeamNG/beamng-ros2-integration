@@ -1,0 +1,6 @@
+int32 total_number_of_steps
+int32 feedback_cycle_size
+---
+bool success
+---
+int32 steps_completed

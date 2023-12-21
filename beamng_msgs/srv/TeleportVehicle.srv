@@ -1,0 +1,5 @@
+string vehicle_id
+float32[] pos
+float32[] rot_quat
+---
+bool success

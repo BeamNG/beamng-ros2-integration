@@ -1,0 +1,74 @@
+{
+    "version": 0.1,
+    "level": "Cliff",
+    "name": "weather_rainy_test",
+    "mode": "None",
+    "weather_presets":"rainy",
+    "time_of_day":0.25,
+    "vehicles": [
+      {
+        "name": "ego_vehicle",
+        "model": "etk800",
+        "position": [-124, 142, 465.3],
+        "rotation": [0, 0, 0, 1],
+        "sensors_classical": [
+            {
+              "name":"damage0",
+              "type":"Damage"
+            },
+            {
+              "name":"time0",
+              "type":"Timer"
+            },
+            {
+              "name":"gforce0",
+              "type":"GForces"
+            },
+            {
+              "name": "electrics0",
+              "type": "Electrics"
+            },
+            {
+              "name": "node_imu",
+              "type": "IMU",
+              "node": 0
+            },
+            {
+              "name": "position_imu",
+              "type": "IMU",
+              "position": [0.73, 0.51, 0.8]
+            }
+          ],
+        "sensors_automation": [
+          {
+              "name":"parking_sensor",
+              "type":"Ultrasonic.smallrange",
+              "position":[0, 1, 2],
+              "rotation": [0, 0]
+            },
+          {
+              "name": "front_cam",
+              "type": "Camera.default",
+              "position": [0.3, -2.1, 1],
+              "rotation": [0, 0]
+            },
+            {
+              "name": "noise_cam",
+              "type" : "CameraNoise",
+              "base sensor": "front_cam"
+            },
+            {
+              "name": "lidar0",
+              "type": "Lidar.default",
+              "position": [0, 0, 1.7],
+              "rotation": [0, 0]
+            },
+            {
+              "name": "lidar_noise",
+              "type" : "LidarNoise",
+              "base sensor": "lidar0"
+            }
+        ]
+      }
+    ]
+  }

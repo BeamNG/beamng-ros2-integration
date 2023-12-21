@@ -1,0 +1,22 @@
+{
+  "version": 0.1,
+  "level": "GridMap",
+  "name": "test",
+  "mode": "None",
+  "vehicles": [
+    {
+      "name": "ego_vehicle",
+      "model": "etk800",
+      "position": [0, 0, 0],
+      "rotation": [0, 0, 0, 1],
+      "sensors_automation": [
+        {
+          "name": "front_cam",
+          "type": "Camera.default",
+          "position": [0.3, -2.1, 1],
+          "rotation": [0, 0]
+        }
+      ]
+    }
+  ]
+}

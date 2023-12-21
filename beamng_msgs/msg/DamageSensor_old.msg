@@ -1,0 +1,2 @@
+DeformGroupInfo deform_group
+PartDamageInfo part_damage

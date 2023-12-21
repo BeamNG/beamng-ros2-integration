@@ -1,0 +1,64 @@
+{
+  "version": 0.1,
+  "level": "Utah",
+  "name": "road_network",
+  "mode": "None",
+  "network_vizualization": "on",
+  "vehicles": [
+    {
+      "name": "ego_vehicle",
+      "model": "etk800",
+      "position": [568.908, 13.422,  139.565],
+      "rotation": [0, 0, 0, 1],
+      "sensors_classical": [
+        {
+          "name":"damage0",
+          "type":"Damage"
+        },
+        {
+          "name":"gforce0",
+          "type":"GForces"
+        },
+        {
+          "name":"time0",
+          "type":"Timer"
+        },
+        {
+          "name": "electrics0",
+          "type": "Electrics"
+        },
+        {
+          "name": "node_imu",
+          "type": "IMU",
+          "node": 0
+        },
+        {
+          "name": "position_imu",
+          "type": "IMU",
+          "position": [0.73, 0.51, 0.8]
+        }
+      ],
+      "sensors_automation": [
+        {
+          "name":"parking_sensor",
+          "type":"Ultrasonic.smallrange",
+          "position":[0, 1, 2],
+          "rotation": [0, 0]
+        },
+        {
+          "name": "front_cam",
+          "type": "Camera.default",
+          "position": [-0.3, 1, 1],
+          "rotation": [0, 0]
+        },
+        {
+          "name": "lidar0",
+          "type": "Lidar.default",
+          "position": [0, 0, 1.7],
+          "rotation": [0, 0]
+        }
+      ]
+    }
+  ]
+}
+

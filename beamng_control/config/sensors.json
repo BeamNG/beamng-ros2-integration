@@ -1,0 +1,46 @@
+{
+  "Camera": {
+    "default": {
+      "requested_update_time": 0.1,
+      "is_using_shared_memory": false,
+      "resolution": [ 256, 256 ],
+      "field_of_view_y": 120,
+      "is_render_colours": true,
+      "is_render_annotations": true,
+      "is_render_instance": true,
+      "is_render_depth": true
+    }
+  },
+  "Lidar": {
+    "default": {
+      "is_visualised": false,
+      "is_annotated": false,
+      "is_using_shared_memory": false,
+      "vertical_resolution": 64,
+      "vertical_angle": 26.9,
+      "rays_per_second": 1310720,
+      "frequency": 10,
+      "horizontal_angle": 360,
+      "max_distance": 85
+    }
+  },
+  "Ultrasonic": {
+    "smallrange": {
+      "is_visualised": true,
+      "is_streaming": false,
+      "range_min_cutoff": 0.15,
+      "range_direct_max_cutoff": 2.5
+    },
+    "midrange": {
+      "is_visualised": false,
+      "range_min_cutoff": 0.15,
+      "range_direct_max_cutoff": 4.5
+    },
+    "largerange": {      
+    "is_visualised": false,
+    "range_min_cutoff": 0.15,
+    "range_direct_max_cutoff": 5.0
+
+    }
+  }
+}
