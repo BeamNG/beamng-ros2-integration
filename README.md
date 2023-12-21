@@ -55,6 +55,9 @@ A node connecting ROS2 to the simulation can then be started with the help of th
 ros2 run beamng_control bridge
 ```
 
+<img src="https://github.com/BeamNG/beamng-ros2-integration/blob/main/media/ROS2_bridge.png" alt="ROS2_bridge" width="900" />
+
+
 It needs to be configured to contain the correct IP address of the machine hosting the simulation.
 Using it will start up a node that connects to the simulation and starts up a scenario as defined in the `beamng_control/config/simple_scenario.json`.
 Other scenario specifications are available in the same directory.
