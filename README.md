@@ -17,7 +17,8 @@ For inquiries regarding commercial use, contact us at <licensing@beamng.com>.
  - [Getting Started](#getstart)
  - [Compatibility](#compatibility)
  - [Troubleshooting](#troubleshooting)
- 
+ - [Contributions](#contributions)
+
 <!-- 
 <a name="docs"></a>
 ## Documentation
@@ -80,11 +81,11 @@ recommended to consult the documentation on BeamNG.drive here:
 
 [https://documentation.beamng.com/][8]
 
-<!--
 ## Contributions
 
 We always welcome user contributions, be sure to check out our [contribution guidelines][9] first, before starting your work.
--->
+
+
 [1]: https://github.com/BeamNG/BeamNGpy
 [8]: https://documentation.beamng.com/
-[9]: https://github.com/BeamNG/BeamNG-ROS-Integration/blob/master/contributing.md
+[9]: https://github.com/BeamNG/BeamNG-ROS2-Integration/blob/main/contributing.md
