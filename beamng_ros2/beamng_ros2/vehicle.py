@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from typing import Any, Dict, List, Tuple, cast
+from typing import Any, Callable, List, Tuple, cast
 
 import beamng_msgs.srv as srv
 import numpy as np
@@ -19,6 +19,8 @@ from beamngpy.misc.colors import coerce_color
 from beamngpy.types import Float3, Float4
 from beamngpy.vehicle import Vehicle
 from geometry_msgs.msg import Transform, TransformStamped
+from rclpy.callback_groups import CallbackGroup
+from rclpy.clock import Clock
 from rclpy.node import Node
 from rclpy.time import Time
 from rclpy.timer import Timer
@@ -108,6 +110,15 @@ class VehicleNode(Node):
         update_sec = self.get_parameter("update_sec").get_parameter_value().double_value
         return self.create_timer(update_sec, self.publisher_callback)
 
+    def create_timer(
+        self,
+        timer_period_sec: float,
+        callback: Callable[..., Any],
+        callback_group: CallbackGroup = None,
+        clock: Clock = None,
+    ) -> Timer:
+        return self.node.create_timer(timer_period_sec, callback, callback_group, clock)
+
     def destroy_node(self):
         if self.destroyed:
             return
@@ -191,6 +202,7 @@ class VehicleNode(Node):
         request: srv.StartCosimulation.Request,
         response: srv.StartCosimulation.Response,
     ):
+        # self._start_cosimulation(request.path_to_cosim_definition)
         self.logger.error("Not implemented yet.")
         """
         To try the experimental cosimulation mode, you need to add the following code in your
@@ -223,6 +235,7 @@ end
         request: srv.StopCosimulation.Request,
         response: srv.StopCosimulation.Response,
     ):
+        # self._stop_cosimulation()
         self.logger.error("Not implemented yet.")
         response.success = False
         return response

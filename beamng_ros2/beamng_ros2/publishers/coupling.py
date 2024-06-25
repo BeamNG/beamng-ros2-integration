@@ -1,13 +1,9 @@
 import socket
-from typing import Any, Dict, List, Optional
+from typing import Any, Dict, Optional
 
 import beamng_msgs.msg as beamng_msgs
-import geometry_msgs.msg as geometry_msgs
 import numpy as np
-import sensor_msgs.msg as sensor_msgs
-from beamng_ros2 import beamng
 from beamng_ros2.publishers.base import VehiclePublisher
-from beamng_ros2.utils import float_to_time, xyz_to_vec3
 from beamngpy.vehicle import Vehicle
 from rclpy.node import Node
 

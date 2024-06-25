@@ -44,8 +44,7 @@ class NetworkPublisher(BeamNGPublisher):
 
     def _delete_old_markers(self):
         markers = [
-            Marker(id=0, ns=f"{type}_{self.name}", action=Marker.DELETEALL)
-            for type in ["left", "middle", "right"]
+            Marker(id=0, ns=f"{type}_{self.name}", action=Marker.DELETEALL) for type in ["left", "middle", "right"]
         ]
         array = MarkerArray(markers=markers)
         self._publisher.publish(array)

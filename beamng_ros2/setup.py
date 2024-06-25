@@ -1,17 +1,14 @@
 import os
 from glob import glob
-from itertools import chain
 from pathlib import Path
 
-from setuptools import setup
+from setuptools import find_packages, setup
 
 package_name = "beamng_ros2"
 
 
 def generate_data_files():
-    data_files = [
-        (os.path.join("share", package_name, "config"), ["config/sensors.json"])
-    ]
+    data_files = [(os.path.join("share", package_name, "config"), ["config/sensors.json"])]
     data_dir = "config"
     for dir in glob(data_dir + "/*"):
         if Path(dir).is_file():
@@ -22,8 +19,8 @@ def generate_data_files():
 
 setup(
     name=package_name,
+    packages=find_packages(),
     version="1.0.0",
-    packages=[package_name],
     data_files=[
         ("share/ament_index/resource_index/packages", ["resource/" + package_name]),
         ("share/" + package_name, ["package.xml"]),

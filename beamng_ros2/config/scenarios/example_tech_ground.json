@@ -1,5 +1,5 @@
 {
-  "version": 0.2,
+  "version": 1.0,
   "level": "tech_ground",
   "name": "example_tech_ground",
   "vehicles": [
@@ -13,7 +13,10 @@
         0.0
       ],
       "rot": [
-        0.0, 0.0, 0.0, 0.1
+        0.0,
+        0.0,
+        0.0,
+        0.1
       ],
       "sensors": [
         {

@@ -17,8 +17,7 @@ from rclpy.node import Node
 from rclpy.parameter import Parameter
 from rclpy.time import Time
 from rclpy.timer import Timer
-from rclpy.executors import MultiThreadedExecutor
-from threading import Thread
+
 
 class BeamNGBridge(Node):
     def _setup_services(self):
@@ -67,8 +66,6 @@ class BeamNGBridge(Node):
         self.logger.info("Started beamng_bridge.")
 
         self.clock = self.get_clock()
-        self.mt_executor = MultiThreadedExecutor()
-        self.executor_thread = Thread(target=self.mt_executor.spin)
 
     def destroy_node(self) -> bool:
         self.disconnect()
@@ -163,7 +160,6 @@ class BeamNGBridge(Node):
 
     def _spawn_vehicle_node(self, vehicle: Vehicle, extra_data: Dict[str, Any]):
         vehicle_node = VehicleNode(vehicle, self, **extra_data)
-        self.mt_executor.add_node(vehicle_node)
         self._vehicles[vehicle.vid] = vehicle_node
 
     def _create_beamng_timer(self):
@@ -178,9 +174,6 @@ class BeamNGBridge(Node):
         self._cancel_timers()
         for node in self._vehicles.values():
             node.destroy_node()
-        self.mt_executor.shutdown(0)
-        self.mt_executor = MultiThreadedExecutor()
-        self.executor_thread = Thread(target=self.mt_executor.spin)
 
         self._vehicle_data = {}
         self._vehicles = {}
@@ -231,7 +224,6 @@ class BeamNGBridge(Node):
             vehicle_extra_data[idx].pop("on_scenario_start")
             self._spawn_vehicle_node(vehicle, vehicle_extra_data[idx])
 
-        self.executor_thread.start()
         self.publisher_callback_beamng()
         self.logger.info(f'Started scenario "{scenario.name}".')
         self.running = True

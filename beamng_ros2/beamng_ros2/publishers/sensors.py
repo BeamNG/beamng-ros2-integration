@@ -118,12 +118,8 @@ class SensorPublisher(VehiclePublisher):
         Returns:
             The configuration of the sensor as a dictionary.
         """
-        sensor_config_name = (
-            sensor_config_name.lower() if sensor_config_name else "default"
-        )
-        sensor_configs: Dict[str, Dict[str, Any]] = SENSOR_DEFS.get(
-            sensor_type.lower(), {}
-        )
+        sensor_config_name = sensor_config_name.lower() if sensor_config_name else "default"
+        sensor_configs: Dict[str, Dict[str, Any]] = SENSOR_DEFS.get(sensor_type.lower(), {})
         sensor_config = sensor_configs.get(sensor_config_name, {})
         return sensor_config
 
@@ -145,9 +141,7 @@ class SensorPublisher(VehiclePublisher):
             sensor_proto_name.append("")
         sensor_type, sensor_config_name = sensor_proto_name
         sensor_publisher = SensorPublisher.get_sensor_publisher(sensor_type)
-        config.update(
-            SensorPublisher.get_sensor_config(sensor_type, sensor_config_name)
-        )
+        config.update(SensorPublisher.get_sensor_config(sensor_type, sensor_config_name))
         config.update(parameters)
         name = name
 
@@ -176,18 +170,14 @@ class SensorPublisher(VehiclePublisher):
 
     def create_publisher(self, node: Node):
         self._node = node
-        self._publisher = node.create_publisher(
-            self.msg_type(), f"~/sensors/{self.name}", 1
-        )
+        self._publisher = node.create_publisher(self.msg_type(), f"~/sensors/{self.name}", 1)
 
     def publish(self, time: Time):
         data = self.get_data(time)
         if data is not None:
             self._publisher.publish(data)
         else:
-            self._node.get_logger().error(
-                f"[{self.name}] Did not receive any data from the sensor."
-            )
+            self._node.get_logger().error(f"[{self.name}] Did not receive any data from the sensor.")
 
 
 class AutoSensorPublisher(SensorPublisher):
@@ -210,9 +200,7 @@ class AutoSensorPublisher(SensorPublisher):
 
     def post_scenario_start(self, vehicle: Vehicle):
         super().post_scenario_start(vehicle)
-        self.sensor = self.proto(
-            name=self.name, bng=vehicle.bng, vehicle=vehicle, **self.config
-        )
+        self.sensor = self.proto(name=self.name, bng=vehicle.bng, vehicle=vehicle, **self.config)
         if "pos" in self.config:
             self.custom_frame = self.vehicle.vid + "_" + self.name
 
@@ -317,9 +305,7 @@ class CameraPublisher(AutoSensorPublisher):
 
     def _get_img_from_rgba(self, data: bytes, time: Time) -> sensor_msgs.Image:
         cam: sensors.Camera = self.sensor
-        decoded = np.frombuffer(data, dtype=np.uint8).reshape(
-            cam.resolution[1], cam.resolution[0], 4
-        )
+        decoded = np.frombuffer(data, dtype=np.uint8).reshape(cam.resolution[1], cam.resolution[0], 4)
         decoded = decoded[..., :3]  # rgba -> rgb
         return sensor_msgs.Image(
             header=self._make_header(time),
@@ -354,21 +340,15 @@ class CameraPublisher(AutoSensorPublisher):
         self._node = node
         cam: sensors.Camera = self.sensor
         if cam.is_render_colours:
-            self._publishers["colour"] = node.create_publisher(
-                self.msg_type(), f"~/sensors/{self.name}/colour", 1
-            )
+            self._publishers["colour"] = node.create_publisher(self.msg_type(), f"~/sensors/{self.name}/colour", 1)
         if cam.is_render_annotations:
             self._publishers["annotation"] = node.create_publisher(
                 self.msg_type(), f"~/sensors/{self.name}/annotation", 1
             )
         if cam.is_render_instance:
-            self._publishers["instance"] = node.create_publisher(
-                self.msg_type(), f"~/sensors/{self.name}/instance", 1
-            )
+            self._publishers["instance"] = node.create_publisher(self.msg_type(), f"~/sensors/{self.name}/instance", 1)
         if cam.is_render_depth:
-            self._publishers["depth"] = node.create_publisher(
-                self.msg_type(), f"~/sensors/{self.name}/depth", 1
-            )
+            self._publishers["depth"] = node.create_publisher(self.msg_type(), f"~/sensors/{self.name}/depth", 1)
 
     def get_data(self, time: Time) -> None:
         """
@@ -386,9 +366,7 @@ class CameraPublisher(AutoSensorPublisher):
             if key in self._publishers and data[key]:
                 self._publishers[key].publish(self._get_img_from_rgba(data[key], time))
         if "depth" in self._publishers and data["depth"]:
-            self._publishers["depth"].publish(
-                self._get_img_from_depth(data["depth"], time)
-            )
+            self._publishers["depth"].publish(self._get_img_from_depth(data["depth"], time))
 
 
 class GPSPublisher(AutoSensorPublisher):
@@ -413,9 +391,7 @@ class GPSPublisher(AutoSensorPublisher):
 
         msg = sensor_msgs.NavSatFix(
             header=self._make_header(time),
-            status=sensor_msgs.NavSatStatus(
-                status=sensor_msgs.NavSatStatus.SERVICE_GPS
-            ),
+            status=sensor_msgs.NavSatStatus(status=sensor_msgs.NavSatStatus.SERVICE_GPS),
             latitude=data["lat"],
             longitude=data["lon"],
             position_covariance_type=sensor_msgs.NavSatFix.COVARIANCE_TYPE_UNKNOWN,
@@ -488,32 +464,22 @@ class LidarPublisher(AutoSensorPublisher):
 
     def create_publisher(self, node: Node):
         super().create_publisher(node)
-        self.tf_listener = TransformListener(
-            self.tf_buffer, self._node, spin_thread=True
-        )
+        self.tf_listener = TransformListener(self.tf_buffer, self._node, spin_thread=True)
 
     def get_data(self, time: Time) -> sensor_msgs.PointCloud2:
         self.sensor = cast(sensors.Lidar, self.sensor)
         data = self.sensor.poll()
+        if isinstance(data["colours"], list):
+            data["colours"] = np.array(data["colours"]).reshape(-1, 4)
         points = cast(np.ndarray, data["pointCloud"])
         colours = cast(np.ndarray, data["colours"])[:, [2, 1, 0, 3]]  # RGBA -> BGRA
-        lidar_data = np.column_stack(
-            (points, colours.flatten().view("float32"))
-        ).tobytes()
+        lidar_data = np.column_stack((points, colours.flatten().view("float32"))).tobytes()
 
         fields = [
-            sensor_msgs.PointField(
-                name="x", offset=0, datatype=sensor_msgs.PointField.FLOAT32, count=1
-            ),
-            sensor_msgs.PointField(
-                name="y", offset=4, datatype=sensor_msgs.PointField.FLOAT32, count=1
-            ),
-            sensor_msgs.PointField(
-                name="z", offset=8, datatype=sensor_msgs.PointField.FLOAT32, count=1
-            ),
-            sensor_msgs.PointField(
-                name="rgba", offset=12, datatype=sensor_msgs.PointField.UINT32, count=1
-            ),
+            sensor_msgs.PointField(name="x", offset=0, datatype=sensor_msgs.PointField.FLOAT32, count=1),
+            sensor_msgs.PointField(name="y", offset=4, datatype=sensor_msgs.PointField.FLOAT32, count=1),
+            sensor_msgs.PointField(name="z", offset=8, datatype=sensor_msgs.PointField.FLOAT32, count=1),
+            sensor_msgs.PointField(name="rgba", offset=12, datatype=sensor_msgs.PointField.UINT32, count=1),
         ]
 
         width = points.shape[0]
@@ -564,14 +530,8 @@ class MeshPublisher(AutoSensorPublisher):
         data = self.poll()
         msg = msgs.MeshSensor(
             header=self._make_header(time, self.vehicle.vid),
-            beams=[
-                self._beam_to_msg(data["beams"][float(i)])
-                for i in range(len(data["beams"]))
-            ],
-            nodes=[
-                self._node_to_msg(data["nodes"][float(i)])
-                for i in range(len(data["nodes"]))
-            ],
+            beams=[self._beam_to_msg(data["beams"][float(i)]) for i in range(len(data["beams"]))],
+            nodes=[self._node_to_msg(data["nodes"][float(i)]) for i in range(len(data["nodes"]))],
         )
         return msg
 
@@ -592,9 +552,7 @@ class PowertrainSensorPublisher(AutoSensorPublisher):
         return msgs.PowertrainSensor
 
     @staticmethod
-    def _device_to_msg(
-        name: str, device: Dict[str, Any]
-    ) -> msgs.PowertrainSensorDevice:
+    def _device_to_msg(name: str, device: Dict[str, Any]) -> msgs.PowertrainSensorDevice:
         return msgs.PowertrainSensorDevice(
             name=name,
             input_av=device["inputAV"],
@@ -614,9 +572,7 @@ class PowertrainSensorPublisher(AutoSensorPublisher):
         data.pop("time")
         msg = msgs.PowertrainSensor(
             header=self._make_header(time, self.vehicle.vid),
-            devices=[
-                self._device_to_msg(name, device) for name, device in data.items()
-            ],
+            devices=[self._device_to_msg(name, device) for name, device in data.items()],
         )
         return msg
 
@@ -635,9 +591,7 @@ class RadarPublisher(AutoSensorPublisher):
     """
 
     def __init__(self, name: str, config: Dict[str, Any]) -> None:
-        self.use_beamng_msg_type = not RADAR_MSGS_FOUND or config.get(
-            "use_beamng_msg_type", False
-        )
+        self.use_beamng_msg_type = not RADAR_MSGS_FOUND or config.get("use_beamng_msg_type", False)
         super().__init__(name, sensors.Radar, config)
 
     def msg_type(self) -> Type:
@@ -696,9 +650,7 @@ class RoadsSensorPublisher(AutoSensorPublisher):
         return msgs.RoadsSensor
 
     @staticmethod
-    def _make_cubic_polynomial(
-        a: float, b: float, c: float, d: float
-    ) -> msgs.CubicPolynomial:
+    def _make_cubic_polynomial(a: float, b: float, c: float, d: float) -> msgs.CubicPolynomial:
         return msgs.CubicPolynomial(a=a, b=b, c=c, d=d)
 
     def get_data(self, time: Time) -> msgs.RoadsSensor | None:
@@ -717,12 +669,8 @@ class RoadsSensorPublisher(AutoSensorPublisher):
             p1_on_cl=xyz_to_point(data["xP1onCL"], data["yP1onCL"], data["zP1onCL"]),
             p2_on_cl=xyz_to_point(data["xP2onCL"], data["yP2onCL"], data["zP2onCL"]),
             p3_on_cl=xyz_to_point(data["xP3onCL"], data["yP3onCL"], data["zP3onCL"]),
-            u_cl=self._make_cubic_polynomial(
-                data["uAofCL"], data["uBofCL"], data["uCofCL"], data["uDofCL"]
-            ),
-            v_cl=self._make_cubic_polynomial(
-                data["vAofCL"], data["vBofCL"], data["vCofCL"], data["vDofCL"]
-            ),
+            u_cl=self._make_cubic_polynomial(data["uAofCL"], data["uBofCL"], data["uCofCL"], data["uDofCL"]),
+            v_cl=self._make_cubic_polynomial(data["vAofCL"], data["vBofCL"], data["vCofCL"], data["vDofCL"]),
             u_left_re=self._make_cubic_polynomial(
                 data["uAofLeftRE"],
                 data["uBofLeftRE"],
@@ -868,18 +816,10 @@ class ElectricsPublisher(ClassicalSensorPublisher):
         msg.clutch = data.get("clutch", float("nan"))
         msg.clutch_input = data.get("clutch_input", float("nan"))
         msg.clutch_ratio = data.get("clutch_ratio", float("nan"))
-        msg.doorflcoupler_notattached = data.get(
-            "doorFLCoupler_notAttached", float("nan")
-        )
-        msg.doorfrcoupler_notattached = data.get(
-            "doorFRCoupler_notAttached", float("nan")
-        )
-        msg.doorrlcoupler_notattached = data.get(
-            "doorRLCoupler_notAttached", float("nan")
-        )
-        msg.doorrrcoupler_notattached = data.get(
-            "doorRRCoupler_notAttached", float("nan")
-        )
+        msg.doorflcoupler_notattached = data.get("doorFLCoupler_notAttached", float("nan"))
+        msg.doorfrcoupler_notattached = data.get("doorFRCoupler_notAttached", float("nan"))
+        msg.doorrlcoupler_notattached = data.get("doorRLCoupler_notAttached", float("nan"))
+        msg.doorrrcoupler_notattached = data.get("doorRRCoupler_notAttached", float("nan"))
         msg.driveshaft = data.get("driveshaft", float("nan"))
         msg.dsewarningpulse = data.get("dseWarningPulse", float("nan"))
         msg.enginerunning = data.get("engineRunning", float("nan"))
@@ -908,12 +848,8 @@ class ElectricsPublisher(ClassicalSensorPublisher):
         msg.highbeam = data.get("highbeam", float("nan"))
         msg.highbeam_wigwag_l = data.get("highbeam_wigwag_L", float("nan"))
         msg.highbeam_wigwag_r = data.get("highbeam_wigwag_R", float("nan"))
-        msg.hoodcatchcoupler_notattached = data.get(
-            "hoodCatchCoupler_notAttached", float("nan")
-        )
-        msg.hoodlatchcoupler_notattached = data.get(
-            "hoodLatchCoupler_notAttached", float("nan")
-        )
+        msg.hoodcatchcoupler_notattached = data.get("hoodCatchCoupler_notAttached", float("nan"))
+        msg.hoodlatchcoupler_notattached = data.get("hoodLatchCoupler_notAttached", float("nan"))
         msg.horn = data.get("horn", float("nan"))
         msg.idlerpm = data.get("idlerpm", float("nan"))
         msg.ignition = bool(data.get("ignition", False))
@@ -958,9 +894,7 @@ class ElectricsPublisher(ClassicalSensorPublisher):
         msg.steering = data.get("steering", float("nan"))
         msg.steeringunassisted = data.get("steeringUnassisted", float("nan"))
         msg.steering_input = data.get("steering_input", float("nan"))
-        msg.tailgatecoupler_notattached = data.get(
-            "tailgateCoupler_notAttached", float("nan")
-        )
+        msg.tailgatecoupler_notattached = data.get("tailgateCoupler_notAttached", float("nan"))
         msg.tcs = data.get("tcs", float("nan"))
         msg.tcs_active = bool(data.get("tcs_active", False))
         msg.throttle = data.get("throttle", float("nan"))
@@ -1067,9 +1001,7 @@ class TimerPublisher(ClassicalSensorPublisher):
         data = self.poll()
         msg = msgs.TimeSensor()
         msg.beamng_simulation_time.sec = int(data["time"])
-        msg.beamng_simulation_time.nanosec = int(
-            (data["time"] - msg.beamng_simulation_time.sec) * 1e6
-        )
+        msg.beamng_simulation_time.nanosec = int((data["time"] - msg.beamng_simulation_time.sec) * 1e6)
         return msg
 
 

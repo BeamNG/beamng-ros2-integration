@@ -19,7 +19,7 @@
         -0.6354,
         0.7720
       ],
-      "mode": "traffic",
+      "ai_mode": "traffic",
       "sensors": [
         {
           "name": "electrics",
@@ -40,12 +40,6 @@
             1280,
             720
           ]
-        },
-        {
-          "name": "lidar",
-          "type": "Lidar.default",
-          "is_streaming": false,
-          "is_using_shared_memory": false
         }
       ]
     },
@@ -64,7 +58,7 @@
         0.46561515331268,
         0.88492774963379
       ],
-      "mode": "traffic",
+      "ai_mode": "traffic",
       "sensors": [
         {
           "name": "electrics",
@@ -74,7 +68,7 @@
     },
     {
       "name": "car2",
-      "model": "citybus",
+      "model": "pigeon",
       "color": "red",
       "pos": [
         588.4429321,
@@ -87,7 +81,7 @@
         -0.43852615356445,
         0.8987181186676
       ],
-      "mode": "traffic",
+      "ai_mode": "traffic",
       "sensors": [
         {
           "name": "electrics",
@@ -110,7 +104,7 @@
         -0.40578389167786,
         0.91396868228912
       ],
-      "mode": "traffic",
+      "ai_mode": "traffic",
       "sensors": [
         {
           "name": "electrics",
@@ -133,7 +127,7 @@
         -0.67532283067703,
         0.73739361763
       ],
-      "mode": "traffic",
+      "ai_mode": "traffic",
       "sensors": [
         {
           "name": "electrics",

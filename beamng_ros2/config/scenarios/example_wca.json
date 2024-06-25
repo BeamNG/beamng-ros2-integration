@@ -1,8 +1,7 @@
 {
-  "version": 0.2,
+  "version": 1.0,
   "level": "west_coast_usa",
-  "name": "complex_scenario",
-  "mode": "None",
+  "name": "example_wca",
   "network_visualization": "on",
   "vehicles": [
     {
@@ -10,12 +9,17 @@
       "model": "etk800",
       "color": "white",
       "pos": [
-        -444.8825656,492.9005968,96.66711975
+        -444.8825656,
+        492.9005968,
+        96.66711975
       ],
       "rot": [
-        -0.016928032040596, -0.026042431592941, 0.92774480581284, 0.37192046642303
+        -0.016928032040596,
+        -0.026042431592941,
+        0.92774480581284,
+        0.37192046642303
       ],
-      "mode": "traffic",
+      "ai_mode": "traffic",
       "sensors": [
         {
           "name": "electrics",
@@ -35,12 +39,6 @@
             1280,
             720
           ]
-        },
-        {
-          "name": "lidar",
-          "type": "Lidar.default",
-          "is_streaming": false,
-          "is_using_shared_memory": false
         }
       ]
     },
@@ -59,7 +57,7 @@
         0.9781129360199,
         -0.19870033860207
       ],
-      "mode": "traffic",
+      "ai_mode": "traffic",
       "sensors": [
         {
           "name": "electrics",
@@ -82,7 +80,7 @@
         0.92938798666,
         0.36807811260223
       ],
-      "mode": "traffic",
+      "ai_mode": "traffic",
       "sensors": [
         {
           "name": "electrics",
@@ -105,7 +103,7 @@
         0.98243498802185,
         0.17862266302109
       ],
-      "mode": "traffic",
+      "ai_mode": "traffic",
       "sensors": [
         {
           "name": "electrics",
@@ -128,7 +126,7 @@
         -0.13327391445637,
         0.99085175991058
       ],
-      "mode": "traffic",
+      "ai_mode": "traffic",
       "sensors": [
         {
           "name": "electrics",
