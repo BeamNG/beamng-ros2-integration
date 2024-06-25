@@ -1,1 +1,1 @@
-beamngpy==1.28
+beamngpy
