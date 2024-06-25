@@ -1,0 +1,11 @@
+string name
+float64 input_av
+float64 gear_ratio
+bool is_broken
+string mode
+string parent_name
+int32 parent_output_index
+float64 output_torque_1
+float64 output_av_1
+float64 output_torque_2
+float64 output_av_2

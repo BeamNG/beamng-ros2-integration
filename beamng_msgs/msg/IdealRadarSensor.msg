@@ -1,0 +1,5 @@
+std_msgs/Header header
+IdealRadarSensorVehicle closest_vehicles1
+IdealRadarSensorVehicle closest_vehicles2
+IdealRadarSensorVehicle closest_vehicles3
+IdealRadarSensorVehicle closest_vehicles4

@@ -1,0 +1,69 @@
+{
+    "time3rdParty": 0.005,
+    "pingTime": 0.00001,
+    "udpReceivePort": 63891,
+    "udpReceiveIP": "127.0.0.1",
+    "udpSendPort": 63890,
+    "udpSendIP": "127.0.0.1",
+    "sensorMap": {
+        "GPSs": [],
+        "IMUs": [],
+        "idealRADARs": [],
+        "roads": []
+    },
+    "signalsTo": [
+        {
+            "type": "number",
+            "name": "wheelSpeedRR",
+            "groupName": "Wheels"
+        },
+        {
+            "type": "number",
+            "name": "wheelSpeedRL",
+            "groupName": "Wheels"
+        },
+        {
+            "type": "number",
+            "name": "rpm",
+            "groupName": "Electrics"
+        }
+    ],
+    "signalsFrom": [
+        {
+            "name": "brakingTorqueRR",
+            "isFreeze": false,
+            "isAdd": false,
+            "type": "number",
+            "isMultiply": false,
+            "isValue": true,
+            "groupName": "Wheels"
+        },
+        {
+            "name": "propulsionTorqueRR",
+            "isFreeze": false,
+            "isAdd": false,
+            "type": "number",
+            "isMultiply": false,
+            "isValue": true,
+            "groupName": "Wheels"
+        },
+        {
+            "name": "brakingTorqueRL",
+            "isFreeze": false,
+            "isAdd": false,
+            "type": "number",
+            "isMultiply": false,
+            "isValue": true,
+            "groupName": "Wheels"
+        },
+        {
+            "name": "propulsionTorqueRL",
+            "isFreeze": false,
+            "isAdd": false,
+            "type": "number",
+            "isMultiply": false,
+            "isValue": true,
+            "groupName": "Wheels"
+        }
+    ]
+}

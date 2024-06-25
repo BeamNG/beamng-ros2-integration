@@ -1,3 +1,3 @@
-string path_to_scenario_definition
+string path_to_scenario_definition '/config/scenarios/example_tech_ground.json'
 ---
 bool success

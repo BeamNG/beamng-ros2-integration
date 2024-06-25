@@ -13,6 +13,8 @@ endif()
 # find dependencies
 find_package(ament_cmake REQUIRED)
 find_package(rosidl_default_generators REQUIRED)
+find_package(std_msgs REQUIRED)
+find_package(geometry_msgs REQUIRED)
 
 rosidl_generate_interfaces(${PROJECT_NAME}
   "srv/ChangeSimulationState.srv"
@@ -20,25 +22,37 @@ rosidl_generate_interfaces(${PROJECT_NAME}
   "srv/StartScenario.srv"
   "srv/TeleportVehicle.srv"
   "srv/PublishRoadNetwork.srv"
-#  "srv/GetCurrentVehiclesInfo.srv"  #need to be fixed
-#  "srv/GetScenarioState.srv"   #need to be fixed
-#  "msg/DeformGroupInfo.msg" #need to be fixed
-  "msg/ElectricsSensor.msg" 
-  "msg/DamageSensor.msg" 
+  "srv/GetCurrentVehiclesInfo.srv"
+  "srv/GetScenarioState.srv"
+  "srv/StartCosimulation.srv"
+  "srv/StopCosimulation.srv"
+  "msg/CosimulationData.msg"
+  "msg/CosimulationInput.msg"
+  "msg/CubicPolynomial.msg"
+  "msg/ElectricsSensor.msg"
+  "msg/DamageSensor.msg"
   "msg/GForceSensor.msg"
- "msg/PartDamageInfo.msg"
+  "msg/IdealRadarSensor.msg"
+  "msg/IdealRadarSensorVehicle.msg"
+  "msg/MeshSensor.msg"
+  "msg/MeshSensorBeam.msg"
+  "msg/MeshSensorNode.msg"
+  "msg/PowertrainSensor.msg"
+  "msg/PowertrainSensorDevice.msg"
+  "msg/RadarReturn.msg"
+  "msg/RadarScan.msg"
+  "msg/RoadsSensor.msg"
   "msg/ScenarioState.msg"
   "msg/StateSensor.msg"
-  "msg/TimeSensor.msg"  
+  "msg/TimeSensor.msg"
   "msg/VehicleControl.msg"
   "msg/VehicleInfo.msg"
+  "msg/WheelThermals.msg"
   "action/Step.action"
 
-
+  DEPENDENCIES std_msgs geometry_msgs
 )
 
-# install(FILES
-# DESTINATION share/${PROJECT_NAME}/
-#)
+ament_export_dependencies(rosidl_default_runtime)
 
 ament_package()

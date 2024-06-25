@@ -1,0 +1,41 @@
+{
+  "version": 0.2,
+  "level": "tech_ground",
+  "name": "example_tech_ground",
+  "vehicles": [
+    {
+      "name": "ego",
+      "model": "sbr",
+      "color": "red",
+      "pos": [
+        0.0,
+        0.0,
+        0.0
+      ],
+      "rot": [
+        0.0, 0.0, 0.0, 0.1
+      ],
+      "sensors": [
+        {
+          "name": "electrics",
+          "type": "Electrics"
+        },
+        {
+          "name": "front_cam",
+          "type": "Camera.default",
+          "pos": [
+            -0.3,
+            -2.1,
+            1
+          ],
+          "is_streaming": false,
+          "is_using_shared_memory": false,
+          "resolution": [
+            1920,
+            1080
+          ]
+        }
+      ]
+    }
+  ]
+}

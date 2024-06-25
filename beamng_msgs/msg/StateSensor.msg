@@ -1,5 +1,6 @@
-float32[3] position
-float32[3] dir
-float32[3] up
-float32[3] velocity
-float32[3] front
+std_msgs/Header header
+geometry_msgs/Point position
+geometry_msgs/Vector3 dir
+geometry_msgs/Vector3 up
+geometry_msgs/Vector3 velocity
+geometry_msgs/Vector3 front

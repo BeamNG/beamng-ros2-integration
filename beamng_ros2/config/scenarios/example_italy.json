@@ -1,0 +1,145 @@
+{
+  "version": 1.0,
+  "level": "italy",
+  "name": "example_italy",
+  "network_visualization": "on",
+  "vehicles": [
+    {
+      "name": "ego",
+      "model": "etk800",
+      "color": "red",
+      "pos": [
+        237.90,
+        -894.42,
+        246.10
+      ],
+      "rot": [
+        0.0173,
+        -0.0019,
+        -0.6354,
+        0.7720
+      ],
+      "mode": "traffic",
+      "sensors": [
+        {
+          "name": "electrics",
+          "type": "Electrics"
+        },
+        {
+          "name": "front_cam",
+          "type": "Camera.default",
+          "pos": [
+            -0.3,
+            -2.1,
+            1
+          ],
+          "is_render_annotations": false,
+          "is_streaming": false,
+          "is_using_shared_memory": false,
+          "resolution": [
+            1280,
+            720
+          ]
+        },
+        {
+          "name": "lidar",
+          "type": "Lidar.default",
+          "is_streaming": false,
+          "is_using_shared_memory": false
+        }
+      ]
+    },
+    {
+      "name": "car1",
+      "model": "etk800",
+      "color": "green",
+      "pos": [
+        319.5605454,
+        -739.9329177,
+        253.6666943
+      ],
+      "rot": [
+        0.0050103343091905,
+        0.00896424241364,
+        0.46561515331268,
+        0.88492774963379
+      ],
+      "mode": "traffic",
+      "sensors": [
+        {
+          "name": "electrics",
+          "type": "Electrics"
+        }
+      ]
+    },
+    {
+      "name": "car2",
+      "model": "citybus",
+      "color": "red",
+      "pos": [
+        588.4429321,
+        -893.9760132,
+        266.9081421
+      ],
+      "rot": [
+        -0.00043405688484199,
+        0.00075940025271848,
+        -0.43852615356445,
+        0.8987181186676
+      ],
+      "mode": "traffic",
+      "sensors": [
+        {
+          "name": "electrics",
+          "type": "Electrics"
+        }
+      ]
+    },
+    {
+      "name": "car3",
+      "model": "etki",
+      "color": "blue",
+      "pos": [
+        220.1560059,
+        1394.432861,
+        187.5546875
+      ],
+      "rot": [
+        -0.00040324180736206,
+        0.00076813047053292,
+        -0.40578389167786,
+        0.91396868228912
+      ],
+      "mode": "traffic",
+      "sensors": [
+        {
+          "name": "electrics",
+          "type": "Electrics"
+        }
+      ]
+    },
+    {
+      "name": "car4",
+      "model": "miramar",
+      "color": "black",
+      "pos": [
+        158.6870625,
+        -371.956824,
+        194.2794763
+      ],
+      "rot": [
+        0.010131595656276,
+        -0.0093331355601549,
+        -0.67532283067703,
+        0.73739361763
+      ],
+      "mode": "traffic",
+      "sensors": [
+        {
+          "name": "electrics",
+          "type": "Electrics"
+        }
+      ]
+    }
+  ]
+}

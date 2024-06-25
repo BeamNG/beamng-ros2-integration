@@ -1,6 +1,6 @@
 string name
-float32[] pos
-float32[] rot_quat
+float64[] pos
+float64[] rot_quat
 string path_to_vehicle_config_file
 ---
 bool success

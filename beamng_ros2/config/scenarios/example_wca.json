@@ -1,0 +1,140 @@
+{
+  "version": 0.2,
+  "level": "west_coast_usa",
+  "name": "complex_scenario",
+  "mode": "None",
+  "network_visualization": "on",
+  "vehicles": [
+    {
+      "name": "ego",
+      "model": "etk800",
+      "color": "white",
+      "pos": [
+        -444.8825656,492.9005968,96.66711975
+      ],
+      "rot": [
+        -0.016928032040596, -0.026042431592941, 0.92774480581284, 0.37192046642303
+      ],
+      "mode": "traffic",
+      "sensors": [
+        {
+          "name": "electrics",
+          "type": "Electrics"
+        },
+        {
+          "name": "front_cam",
+          "type": "Camera.default",
+          "pos": [
+            -0.3,
+            -2.1,
+            1
+          ],
+          "is_streaming": false,
+          "is_using_shared_memory": false,
+          "resolution": [
+            1280,
+            720
+          ]
+        },
+        {
+          "name": "lidar",
+          "type": "Lidar.default",
+          "is_streaming": false,
+          "is_using_shared_memory": false
+        }
+      ]
+    },
+    {
+      "name": "car1",
+      "model": "sunburst",
+      "color": "purple",
+      "pos": [
+        488.7697907,
+        -624.1860578,
+        175.5213924
+      ],
+      "rot": [
+        0.011821272782981,
+        -0.060609702020884,
+        0.9781129360199,
+        -0.19870033860207
+      ],
+      "mode": "traffic",
+      "sensors": [
+        {
+          "name": "electrics",
+          "type": "Electrics"
+        }
+      ]
+    },
+    {
+      "name": "car2",
+      "model": "bolide",
+      "color": "black",
+      "pos": [
+        -377.6441591,
+        424.5573799,
+        96.43943744
+      ],
+      "rot": [
+        -0.0098177408799529,
+        0.025691971182823,
+        0.92938798666,
+        0.36807811260223
+      ],
+      "mode": "traffic",
+      "sensors": [
+        {
+          "name": "electrics",
+          "type": "Electrics"
+        }
+      ]
+    },
+    {
+      "name": "car3",
+      "model": "pickup",
+      "color": "yellow",
+      "pos": [
+        124.6226886,
+        758.0929444,
+        99.54842872
+      ],
+      "rot": [
+        0.04308807477355,
+        -0.032542988657951,
+        0.98243498802185,
+        0.17862266302109
+      ],
+      "mode": "traffic",
+      "sensors": [
+        {
+          "name": "electrics",
+          "type": "Electrics"
+        }
+      ]
+    },
+    {
+      "name": "car4",
+      "model": "moonhawk",
+      "color": "brown",
+      "pos": [
+        112.5969757,
+        1142.53817,
+        106.788224
+      ],
+      "rot": [
+        -0.010999002493918,
+        0.018163265660405,
+        -0.13327391445637,
+        0.99085175991058
+      ],
+      "mode": "traffic",
+      "sensors": [
+        {
+          "name": "electrics",
+          "type": "Electrics"
+        }
+      ]
+    }
+  ]
+}

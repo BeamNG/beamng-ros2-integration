@@ -1,0 +1,7 @@
+float32 range
+float32 doppler_velocity
+float32 azimuth
+float32 elevation
+float32 radar_cross_section
+float32 signal_to_noise_ratio
+float32 facing_factor

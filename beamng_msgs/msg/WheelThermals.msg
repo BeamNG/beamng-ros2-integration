@@ -1,0 +1,3 @@
+float64 brake_core_temperature
+float64 brake_surface_temperature
+float64 brake_thermal_efficiency

@@ -1,5 +1,5 @@
 string vehicle_id
-float32[] pos
-float32[] rot_quat
+geometry_msgs/Point pos
+geometry_msgs/Quaternion rot_quat
 ---
 bool success

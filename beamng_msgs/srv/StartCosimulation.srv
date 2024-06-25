@@ -1,0 +1,3 @@
+string path_to_cosim_definition '/config/cosim/default.json'
+---
+bool success
