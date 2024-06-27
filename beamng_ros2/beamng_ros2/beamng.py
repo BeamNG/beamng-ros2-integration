@@ -89,11 +89,13 @@ class BeamNGBridge(Node):
         timers_cancelled = False
         for node in self._vehicles.values():
             if node.timer:
-                node.timer.cancel()
+                self.destroy_timer(node.timer)
                 timers_cancelled = True
+                node.timer = None
         if self._publisher_timer:
             timers_cancelled = True
-            self._publisher_timer.cancel()
+            self.destroy_timer(self._publisher_timer)
+            self._publisher_timer = None
         return timers_cancelled
 
     def set_parameters(self, parameter_list: List[rclpy.Parameter]) -> List[SetParametersResult]:
@@ -211,7 +213,7 @@ class BeamNGBridge(Node):
             self._network_publisher.create_publisher(self)
         else:
             if self._network_publisher and self._network_publisher._publisher:
-                self._network_publisher._publisher.destroy()
+                self.destroy_publisher(self._network_publisher._publisher)
             self._network_publisher = None
         self._timer = self._create_beamng_timer()
 
