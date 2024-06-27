@@ -54,8 +54,9 @@ The BeamNG ROS2 integration is tested with the following ROS2 distributions: [Fo
 
 ### Optional Dependencies
 If available, BeamNG-ROS2 will use the `python-rapidjson` library to support JSON files which do not strictly follow the standard:
+
   ```bash
-  pip install json5
+  pip install python-rapidjson
   ```
 
 <a name="getstart"></a>
@@ -75,6 +76,11 @@ To use this project, a basic knowledge of the BeamNG.tech simulator and the Beam
   PowerShell:
   ```posh
   Bin64\BeamNG.tech.x64.exe -console -nosteam -tcom-listen-ip <LISTEN_IP> -lua "extensions.load('tech/techCore');tech_techCore.openServer(64256)"
+  ```
+
+  Linux Terminal:
+  ```bash
+  BinLinux/BeamNG.tech.x64 -nosteam -tcom-listen-ip <LISTEN_IP> -lua "extensions.load('tech/techCore');tech_techCore.openServer(64256)"
   ```
 
   `<LISTEN_IP>` will be `127.0.0.1` in the case of running BeamNG.tech on the same machine and operating system as the ROS2 interface. If you are running ROS2 using WSL or want to connect to a remote machine, you need to set the listen IP to the one of the corresponding network interface.
@@ -106,8 +112,9 @@ To use this project, a basic knowledge of the BeamNG.tech simulator and the Beam
 
 5. To operate the node, you can use the exposed services, you can find their list in [https://beamngpy.readthedocs.io/en/latest/_static/beamng_msgs/interfaces/service_definitions.html](https://beamngpy.readthedocs.io/en/latest/_static/beamng_msgs/interfaces/service_definitions.html). Getting access to sensor data requires you to launch a scenario using the [StartScenario](https://beamngpy.readthedocs.io/en/latest/_static/beamng_msgs/interfaces/srv/StartScenario.html) service:
 
-   ```bash
-   ros2 service call /beamng_bridge/start_scenario beamng_msgs/srv/StartScenario "{path_to_scenario_definition: '/config/scenarios/example_tech_ground.json'}"
+  ```bash
+  ros2 service call /beamng_bridge/start_scenario beamng_msgs/srv/StartScenario "{path_to_scenario_definition: '/config/scenarios/example_tech_ground.json'}"
+  ```
 
 Using it will start up a node that connects to the simulation and starts up a scenario as defined in the `beamng_ros2/config/scenarios/example_tech_ground.json`.
 Other scenario specifications are available in the same directory.
