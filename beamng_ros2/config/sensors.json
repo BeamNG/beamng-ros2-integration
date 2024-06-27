@@ -1,13 +1,24 @@
 {
   "camera": {
     "default": {
-      "pos": [0, 0, 3],
-      "dir": [0, -1, 0],
+      "pos": [
+        0,
+        0,
+        3
+      ],
+      "dir": [
+        0,
+        -1,
+        0
+      ],
       "requested_update_time": 0.02,
       "is_using_shared_memory": false,
       "is_streaming": false,
       "is_visualised": false,
-      "resolution": [ 512, 512 ],
+      "resolution": [
+        512,
+        512
+      ],
       "field_of_view_y": 120,
       "is_render_colours": true,
       "is_render_annotations": false,
@@ -17,28 +28,46 @@
   },
   "gps": {
     "default": {
-      "pos": [0, 0, 1.7],
-      "is_send_immediately": true,
-      "requested_update_time": 0.02
+      "pos": [
+        0,
+        0,
+        1.7
+      ],
+      "is_send_immediately": true
     }
   },
   "imu": {
     "default": {
-      "pos": [0, 0, 1.7],
-      "dir": [0, -1, 0],
+      "pos": [
+        0,
+        0,
+        1.7
+      ],
+      "dir": [
+        0,
+        -1,
+        0
+      ],
       "is_send_immediately": true
     }
   },
   "ideal_radar": {
     "default": {
-      "is_send_immediately": true,
-      "requested_update_time": 0.02
+      "is_send_immediately": true
     }
   },
   "lidar": {
     "default": {
-      "pos": [0, 0, 1.7],
-      "dir": [0, -1, 0],
+      "pos": [
+        0,
+        0,
+        1.7
+      ],
+      "dir": [
+        0,
+        -1,
+        0
+      ],
       "requested_update_time": 0.02,
       "is_visualised": false,
       "is_using_shared_memory": false,
@@ -46,57 +75,93 @@
     }
   },
   "mesh": {
-    "default": {
-      "requested_update_time": 0.02
-    }
+    "default": {}
   },
   "powertrain": {
     "default": {
-      "is_send_immediately": true,
-      "requested_update_time": 0.02
+      "is_send_immediately": true
     }
   },
   "radar": {
     "default": {
-      "pos": [0, 0, 1.7],
-      "dir": [0, -1, 0],
+      "pos": [
+        0,
+        0,
+        1.7
+      ],
+      "dir": [
+        0,
+        -1,
+        0
+      ],
       "requested_update_time": 0.02
     }
   },
   "roadssensor": {
     "default": {
-      "is_send_immediately": true,
-      "requested_update_time": 0.02
+      "is_send_immediately": true
     }
   },
   "ultrasonic": {
     "smallrange": {
-      "pos": [0, 0, 1.7],
-      "dir": [0, -1, 0],
+      "pos": [
+        0,
+        0,
+        1.7
+      ],
+      "dir": [
+        0,
+        -1,
+        0
+      ],
       "is_visualised": false,
       "range_min_cutoff": 0.15,
       "range_direct_max_cutoff": 2.5,
       "requested_update_time": 0.02
     },
     "midrange": {
-      "pos": [0, 0, 1.7],
-      "dir": [0, -1, 0],
+      "pos": [
+        0,
+        0,
+        1.7
+      ],
+      "dir": [
+        0,
+        -1,
+        0
+      ],
       "is_visualised": false,
       "range_min_cutoff": 0.15,
       "range_direct_max_cutoff": 4.5,
       "requested_update_time": 0.02
     },
     "largerange": {
-      "pos": [0, 0, 1.7],
-      "dir": [0, -1, 0],
+      "pos": [
+        0,
+        0,
+        1.7
+      ],
+      "dir": [
+        0,
+        -1,
+        0
+      ],
       "is_visualised": false,
       "range_min_cutoff": 0.15,
       "range_direct_max_cutoff": 5.0,
       "requested_update_time": 0.02
     },
     "default": {
-      "pos": [0, 0, 1.7],
-      "dir": [0, -1, 0],
+      "pos": [
+        0,
+        0,
+        1.7
+      ],
+      "dir": [
+        0,
+        -1,
+        0
+      ],
       "is_visualised": false,
       "range_min_cutoff": 0.15,
       "range_direct_max_cutoff": 4.5,

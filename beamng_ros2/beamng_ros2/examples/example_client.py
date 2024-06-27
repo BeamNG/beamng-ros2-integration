@@ -16,10 +16,12 @@ class ExampleClientAsync(Node):
             self.get_logger().info("service not available, waiting again...")
         self.req = StartScenario.Request()
 
-    def send_request(self):
+    def send_request(self, path_to_scenario_definition: str | None):
         """
         Sends the ``StartScenario`` request to the BeamNGBridge node.
         """
+        if path_to_scenario_definition is not None:
+            self.req.path_to_scenario_definition = path_to_scenario_definition
         self.future = self.cli.call_async(self.req)
         rclpy.spin_until_future_complete(self, self.future)
         return self.future.result()
@@ -36,7 +38,7 @@ def main(args=None):
     rclpy.init(args=args)
 
     minimal_client = ExampleClientAsync()
-    response = minimal_client.send_request()
+    response = minimal_client.send_request("/config/scenarios/example_tech_ground.json")
 
     input("Press Enter to exit...")
     minimal_client.destroy_node()
