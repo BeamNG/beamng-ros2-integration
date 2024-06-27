@@ -67,13 +67,19 @@ To use this project, a basic knowledge of the BeamNG.tech simulator and the Beam
 ### Steps
 1. After setting up BeamNG.tech and BeamNGpy with a Python environment, the simulation needs to be listening on the BeamNGpy socket. To do that, you can run the executable with the following arguments:
 
-  ```bash
+  Command prompt (`cmd.exe`):
+  ```bat
   Bin64\BeamNG.tech.x64.exe -console -nosteam -tcom-listen-ip <LISTEN_IP> -lua extensions.load('tech/techCore');tech_techCore.openServer(64256)
+  ```
+
+  PowerShell:
+  ```posh
+  Bin64\BeamNG.tech.x64.exe -console -nosteam -tcom-listen-ip <LISTEN_IP> -lua "extensions.load('tech/techCore');tech_techCore.openServer(64256)"
   ```
 
   `<LISTEN_IP>` will be `127.0.0.1` in the case of running BeamNG.tech on the same machine and operating system as the ROS2 interface. If you are running ROS2 using WSL or want to connect to a remote machine, you need to set the listen IP to the one of the corresponding network interface.
 
-2. The ROS2 packages from this repository need to be added and build in your colcon workspace. See the [ROS2 tutorials](https://docs.ros.org/en/humble/Tutorials.html) for more information on how to set up a colcon workspace.
+2. The ROS2 packages from this repository need to be added and built in your colcon workspace. See the [ROS2 tutorials](https://docs.ros.org/en/humble/Tutorials.html) for more information on how to set up a colcon workspace.
 
   ```bash
   source /opt/ros/humble/setup.bash
@@ -81,6 +87,7 @@ To use this project, a basic knowledge of the BeamNG.tech simulator and the Beam
   git clone https://github.com/BeamNG/beamng-ros2-integration.git
   cd ~/ros2_ws
   rosdep install -i --from-path src --rosdistro humble -y
+  colcon build # or colcon build --symlink-install
   ```
 
 3. A node connecting ROS2 to the simulation can be started using the `ros2 run` command:
