@@ -19,6 +19,7 @@ find_package(geometry_msgs REQUIRED)
 rosidl_generate_interfaces(${PROJECT_NAME}
   "srv/ChangeSimulationState.srv"
   "srv/SpawnVehicle.srv"
+  "srv/VehicleCommand.srv"
   "srv/StartScenario.srv"
   "srv/TeleportVehicle.srv"
   "srv/PublishRoadNetwork.srv"

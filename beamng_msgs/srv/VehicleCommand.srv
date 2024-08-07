@@ -1,0 +1,5 @@
+string vehicle_id
+float32 linear_velocity  # Positive for acceleration, negative for deceleration
+float32 angular_velocity # Positive for turning left, negative for turning right
+---
+bool success
