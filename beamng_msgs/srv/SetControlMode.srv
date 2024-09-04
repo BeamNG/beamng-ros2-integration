@@ -1,0 +1,4 @@
+string vehicle_id      # The vehicle to apply the mode change to
+string control_mode    # The requested control mode ("ai" or "keyboard")
+---
+bool success           # Whether the operation was successful

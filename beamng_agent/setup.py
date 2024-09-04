@@ -7,8 +7,7 @@ setup(
     version='0.0.0',
     packages=[package_name],
     py_modules=[
-        'beamng_agent.beamng_agent',
-        'beamng_agent.twist2bng'
+        'beamng_agent.beamng_agent'
     ],
     install_requires=['setuptools'],
     zip_safe=True,

@@ -7,7 +7,7 @@ from geometry_msgs.msg import Twist
 from std_msgs.msg import String
 import beamngpy as bngpy
 from beamng_msgs.msg import VehicleControl
-from beamng_msgs.srv import VehicleCommand  # Adjust the import based on your package structure
+from beamng_msgs.srv import VehicleCommand, SetControlMode 
 from pathlib import Path
 from distutils.version import LooseVersion
 
@@ -22,7 +22,7 @@ class VehicleControlNode(Node):
         
         host = self.declare_parameter("host", "172.21.192.1").value
         port = self.declare_parameter("port", 64256).value
-        driving_mode = self.declare_parameter("driving_mode", "keyboard").value
+        self.driving_mode = self.declare_parameter("driving_mode", "keyboard").value
         vehicle_id = self.declare_parameter("vehicle_id", "ego").value
 
         if not vehicle_id:
@@ -53,14 +53,17 @@ class VehicleControlNode(Node):
         self.subscription = self.create_subscription(
             VehicleControl,
             '/control',
-            lambda msg: self.send_control_signal(msg, driving_mode),
+            lambda msg: self.send_control_signal(msg, self.driving_mode),
             10
         )
         
         self.twist_to_bng = TwistToBNG(self)
         
         self.srv = self.create_service(VehicleCommand, 'vehicle_command', self.vehicle_command_callback)
-
+        
+        # Create the service for setting control mode
+        self.mode_srv = self.create_service(SetControlMode, 'set_control_mode', self.set_control_mode_callback)
+        
     def vehicle_command_callback(self, request, response):
         vehicle_id = request.vehicle_id
         linear_velocity = request.linear_velocity
@@ -80,10 +83,30 @@ class VehicleControlNode(Node):
         response.success = True
         return response
 
+    def set_control_mode_callback(self, request, response):
+        vehicle_id = request.vehicle_id
+        mode = request.control_mode
+
+        if vehicle_id != self.vehicle_client.vid:
+            self.get_logger().error(f'Unknown vehicle id: {vehicle_id}')
+            response.success = False
+            return response
+
+        if mode not in ["ai", "keyboard"]:
+            self.get_logger().error(f'Invalid control mode: {mode}')
+            response.success = False
+            return response
+        
+        self.driving_mode = mode
+        self.get_logger().info(f'Control mode set to: {mode} for vehicle: {vehicle_id}')
+        response.success = True
+        return response
+
     def send_control_signal(self, signal, mode):
         if mode == "ai":
             self.vehicle_client.ai_set_mode('span')
         else:
+            self.vehicle_client.ai_set_mode('disable')
             self.vehicle_client.control(
                 steering=signal.steering,
                 throttle=signal.throttle,

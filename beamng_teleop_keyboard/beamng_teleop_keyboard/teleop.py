@@ -20,10 +20,10 @@ import os
 import beamngpy as bngpy
 from beamng_msgs.msg import VehicleControl
 
-AGV_MAX_LIN_VEL = 250
+AGV_MAX_LIN_VEL = 1.0
 AGV_MAX_ANG_VEL = 1.0
 
-LIN_VEL_STEP_SIZE = 0.001
+LIN_VEL_STEP_SIZE = 0.01
 ANG_VEL_STEP_SIZE = 0.05
 
 msg = """

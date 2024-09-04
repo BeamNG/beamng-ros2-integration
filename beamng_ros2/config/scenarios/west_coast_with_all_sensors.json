@@ -20,66 +20,8 @@
       ],
       "sensors": [
         {
-          "name": "electrics0",
-          "type": "Electrics"
-        },
-        {
-          "name": "position_imu0",
-          "type": "IMU",
-          "pos": [
-            0.73,
-            0.51,
-            0.8
-          ]
-        },
-        {
-          "name": "damage0",
-          "type": "Damage"
-        },
-        {
-          "name": "gforce0",
-          "type": "GForces"
-        },
-        {
           "name": "time0",
           "type": "Timer"
-        },
-        {
-          "name": "lidar0",
-          "type": "Lidar.default",
-          "pos": [
-            0,
-            0,
-            1.7
-          ],
-          "dir": [
-            0,
-            -1,
-            0
-          ],
-          "up": [
-            0,
-            0,
-            1
-          ]
-        },
-        {
-          "name": "front_cam",
-          "type": "Camera.default",
-          "pos": [
-            -0.3,
-            -2.1,
-            1
-          ]
-        },
-        {
-          "name": "ultrasonic_right0",
-          "type": "Ultrasonic.smallrange",
-          "pos": [
-            -1.2,
-            -2.1,
-            1.0
-          ]
         }
       ]
     }
