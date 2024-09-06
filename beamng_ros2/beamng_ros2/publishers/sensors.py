@@ -644,37 +644,37 @@ class RadarPublisher(AutoSensorPublisher):
 
     def msg_type(self) -> Type:
         if self.use_beamng_msg_type:
-            return radar_msgs.RadarScan
-        return msgs.RadarScan
+            return msgs.RadarScan
+        return radar_msgs.RadarScan
 
     @staticmethod
     def _return_to_msg(ret: List[float]) -> radar_msgs.RadarReturn:
         return radar_msgs.RadarReturn(
-            range=ret[0],
-            azimut=ret[2],
-            elevation=ret[3],
-            doppler_velocity=ret[1],
-            amplitude=ret[5],
+            range=float(ret[0]),
+            azimut=float(ret[2]),
+            elevation=float(ret[3]),
+            doppler_velocity=float(ret[1]),
+            amplitude=float(ret[5]),
         )
 
     @staticmethod
     def _return_to_beamng_msg(ret: List[float]) -> msgs.RadarReturn:
         return msgs.RadarReturn(
-            range=ret[0],
-            doppler_velocity=ret[1],
-            azimuth=ret[2],
-            elevation=ret[3],
-            radar_cross_section=ret[4],
-            signal_to_noise_ratio=ret[5],
-            facing_factor=ret[6],
+            range=float(ret[0]),
+            doppler_velocity=float(ret[1]),
+            azimuth=float(ret[2]),
+            elevation=float(ret[3]),
+            radar_cross_section=float(ret[4]),
+            signal_to_noise_ratio=float(ret[5]),
+            facing_factor=float(ret[6]),
         )
 
     def get_data(self, time: Time) -> "RadarReturn":
         data = self.poll()
         if self.use_beamng_msg_type:
-            returns = [self._return_to_msg(ret) for ret in data]
-        else:
             returns = [self._return_to_beamng_msg(ret) for ret in data]
+        else:
+            returns = [self._return_to_msg(ret) for ret in data]
         msg = self.msg_type()(
             header=self._make_header(time),
             returns=returns,
