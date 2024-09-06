@@ -8,7 +8,9 @@ package_name = "beamng_ros2"
 
 
 def generate_data_files():
-    data_files = [(os.path.join("share", package_name, "config"), ["config/sensors.json"])]
+    data_files = [
+        (os.path.join("share", package_name, "config"), ["config/sensors.json"])
+    ]
     data_dir = "config"
     for dir in glob(data_dir + "/*"):
         if Path(dir).is_file():

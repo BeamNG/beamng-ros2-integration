@@ -23,20 +23,29 @@ class CouplingPublisher(VehiclePublisher):
         send_port = config["udpSendPort"]
         self.signals_to = config["signalsTo"]
         self.signals_from = config["signalsFrom"]
-        self.sig_map_from = {f'{s["groupName"]}.{s["name"]}': i for i, s in enumerate(self.signals_from)}
-        self.sig_map_to = {f'{s["groupName"]}.{s["name"]}': i for i, s in enumerate(self.signals_to)}
+        self.sig_map_from = {
+            f'{s["groupName"]}.{s["name"]}': i for i, s in enumerate(self.signals_from)
+        }
+        self.sig_map_to = {
+            f'{s["groupName"]}.{s["name"]}': i for i, s in enumerate(self.signals_to)
+        }
         self.socket = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
         self.socket.setblocking(True)
         self.socket.bind((send_ip, send_port))
         self._send_buffer = np.zeros((1 + len(self.signals_from)), dtype=np.float64)
         self._recv_buffer = bytearray((1 + len(self.signals_to)) * 8)
 
-        self._publisher = node.create_publisher(beamng_msgs.CosimulationData, "~/cosim", 0)
+        self._publisher = node.create_publisher(
+            beamng_msgs.CosimulationData, "~/cosim", 0
+        )
         self._subscription = node.create_subscription(
             beamng_msgs.CosimulationData, "~/cosim/input", self.subscription_callback, 0
         )
         self._subscription_name = node.create_subscription(
-            beamng_msgs.CosimulationInput, "~/cosim/input/by_name", self.subscription_callback_namevalue, 0
+            beamng_msgs.CosimulationInput,
+            "~/cosim/input/by_name",
+            self.subscription_callback_namevalue,
+            0,
         )
         self._clock = node.get_clock()
         self._timer = node.create_timer(self.update_time, self.publish)

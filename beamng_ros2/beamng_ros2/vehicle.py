@@ -4,7 +4,12 @@ from typing import Any, Callable, List, Tuple, cast
 
 import beamng_msgs.srv as srv
 import numpy as np
-from beamng_ros2.publishers import AutoSensorPublisher, CouplingPublisher, SensorPublisher, VehicleVisualizer
+from beamng_ros2.publishers import (
+    AutoSensorPublisher,
+    CouplingPublisher,
+    SensorPublisher,
+    VehicleVisualizer,
+)
 from beamng_ros2.utils import (
     beamng_rot_to_ros_coords,
     beamng_vec_to_ros_coords,
@@ -33,8 +38,12 @@ class VehicleNode(Node):
     DELAY_OFFSET_SEC = 10.0
 
     def _create_services(self):
-        self.create_service(srv.StartCosimulation, "~/start_cosim", self.start_cosimulation)
-        self.create_service(srv.StopCosimulation, "~/stop_cosim", self.stop_cosimulation)
+        self.create_service(
+            srv.StartCosimulation, "~/start_cosim", self.start_cosimulation
+        )
+        self.create_service(
+            srv.StopCosimulation, "~/stop_cosim", self.stop_cosimulation
+        )
 
     def _create_publishers(self):
         for sensor in self.sensors:
@@ -51,7 +60,9 @@ class VehicleNode(Node):
         bbox = {key: np.array(value) for key, value in self.vehicle.get_bbox().items()}
         pos = self.vehicle.state["pos"]
         x = float(np.linalg.norm(bbox["front_bottom_left"] - bbox["rear_bottom_left"]))
-        y = float(np.linalg.norm(bbox["front_bottom_left"] - bbox["front_bottom_right"]))
+        y = float(
+            np.linalg.norm(bbox["front_bottom_left"] - bbox["front_bottom_right"])
+        )
         z = float(np.linalg.norm(bbox["front_bottom_left"] - bbox["front_top_left"]))
 
         box_center = (bbox["rear_top_right"] + bbox["front_bottom_left"]) / 2
@@ -144,7 +155,9 @@ class VehicleNode(Node):
         tf_msg = TransformStamped(
             header=Header(stamp=time.to_msg(), frame_id=self.vehicle.vid),
             child_frame_id=sensor.custom_frame,
-            transform=Transform(translation=xyz_to_vec3(*pos), rotation=xyzw_to_quat(*rotation)),
+            transform=Transform(
+                translation=xyz_to_vec3(*pos), rotation=xyzw_to_quat(*rotation)
+            ),
         )
         self._tf_static_broadcaster.sendTransform(tf_msg)
 
@@ -156,7 +169,9 @@ class VehicleNode(Node):
         tf_msg = TransformStamped(
             header=Header(stamp=time.to_msg(), frame_id="map"),
             child_frame_id=self.vehicle.vid,
-            transform=Transform(translation=xyz_to_vec3(*pos_centered), rotation=xyzw_to_quat(*rotation)),
+            transform=Transform(
+                translation=xyz_to_vec3(*pos_centered), rotation=xyzw_to_quat(*rotation)
+            ),
         )
         self._tf_broadcaster.sendTransform(tf_msg)
 
@@ -165,7 +180,9 @@ class VehicleNode(Node):
         broadcast = self.next_static_broadcast < 0
         if broadcast:
             self.next_static_broadcast = (
-                self.get_parameter("static_broadcast_steps").get_parameter_value().integer_value
+                self.get_parameter("static_broadcast_steps")
+                .get_parameter_value()
+                .integer_value
             )
 
         try:
@@ -187,11 +204,16 @@ class VehicleNode(Node):
         try:
             data = load_json(path_to_cosim_definition)
         except FileNotFoundError:
-            self.logger.error(f'file "{path_to_cosim_definition}" ' "does not exist, aborting subroutine")
+            self.logger.error(
+                f'file "{path_to_cosim_definition}" '
+                "does not exist, aborting subroutine"
+            )
             return False
 
         self._coupling_publisher = CouplingPublisher(data, self, self.vehicle)
-        self.vehicle._send(dict(type="StartCosimulation", **data)).ack("CosimulationStarted")
+        self.vehicle._send(dict(type="StartCosimulation", **data)).ack(
+            "CosimulationStarted"
+        )
         return True
 
     def _stop_cosimulation(self):

@@ -149,3 +149,6 @@ We always welcome user contributions, be sure to check out our [contribution gui
 [1]: https://github.com/BeamNG/BeamNGpy
 [8]: https://documentation.beamng.com/
 [9]: https://github.com/BeamNG/BeamNG-ROS2-Integration/blob/main/CONTRIBUTING.md
+
+The Python code is formatted using [Black](https://github.com/psf/black), please use it to
+format the code you want to contribute.

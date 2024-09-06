@@ -1,24 +1,20 @@
 from setuptools import setup
 
-package_name = 'beamng_agent'
+package_name = "beamng_agent"
 
 setup(
     name=package_name,
-    version='0.0.0',
+    version="0.0.0",
     packages=[package_name],
-    py_modules=[
-        'beamng_agent.beamng_agent'
-    ],
-    install_requires=['setuptools'],
+    py_modules=["beamng_agent.beamng_agent"],
+    install_requires=["setuptools"],
     zip_safe=True,
     maintainer="BeamNG GmbH",
     maintainer_email="tech@beamng.gmbh",
     description="Integration of BeamNG.tech into the ROS2 ecosystem.",
     license="MIT",
-    tests_require=['pytest'],
+    tests_require=["pytest"],
     entry_points={
-        'console_scripts': [
-            'beamng_agent = beamng_agent.beamng_agent:main'
-        ],
+        "console_scripts": ["beamng_agent = beamng_agent.beamng_agent:main"],
     },
 )

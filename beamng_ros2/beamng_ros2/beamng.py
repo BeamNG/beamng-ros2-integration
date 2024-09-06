@@ -21,7 +21,9 @@ from rclpy.timer import Timer
 
 class BeamNGBridge(Node):
     def _setup_services(self):
-        self.create_service(srv.GetScenarioState, "~/get_scenario_state", self.get_scenario_state)
+        self.create_service(
+            srv.GetScenarioState, "~/get_scenario_state", self.get_scenario_state
+        )
         self.create_service(srv.SpawnVehicle, "~/spawn_vehicle", self.spawn_vehicle)
         self.create_service(srv.StartScenario, "~/start_scenario", self.start_scenario)
         self.create_service(
@@ -29,7 +31,9 @@ class BeamNGBridge(Node):
             "~/get_current_vehicles",
             self.get_current_vehicles,
         )
-        self.create_service(srv.TeleportVehicle, "~/teleport_vehicle", self.teleport_vehicle)
+        self.create_service(
+            srv.TeleportVehicle, "~/teleport_vehicle", self.teleport_vehicle
+        )
         self.create_service(srv.ChangeSimulationState, "~/pause", self.pause)
         self.create_service(srv.ChangeSimulationState, "~/resume", self.resume)
 
@@ -98,7 +102,9 @@ class BeamNGBridge(Node):
             self._publisher_timer = None
         return timers_cancelled
 
-    def set_parameters(self, parameter_list: List[rclpy.Parameter]) -> List[SetParametersResult]:
+    def set_parameters(
+        self, parameter_list: List[rclpy.Parameter]
+    ) -> List[SetParametersResult]:
         timers_cancelled = False
         for parameter in parameter_list:
             if self._beamng and (parameter.name == "host" or parameter.name == "port"):
@@ -139,23 +145,35 @@ class BeamNGBridge(Node):
             response.state.scenario_name = game_state["state"]
         return response
 
-    def spawn_vehicle(self, request: srv.SpawnVehicle.Request, response: srv.SpawnVehicle.Response):
+    def spawn_vehicle(
+        self, request: srv.SpawnVehicle.Request, response: srv.SpawnVehicle.Response
+    ):
         response.success = False
 
         try:
             vehicle_spec = load_json(request.path_to_vehicle_config_file)
         except FileNotFoundError:
-            self.logger.error(f'file "{request.path_to_vehicle_config_file}" ' "does not exist, aborting subroutine")
+            self.logger.error(
+                f'file "{request.path_to_vehicle_config_file}" '
+                "does not exist, aborting subroutine"
+            )
             return response
         if len(request.pos) != 3:
-            self.logger.error("position param does not fit " f"required format:{str(request.pos)}")
+            self.logger.error(
+                "position param does not fit " f"required format:{str(request.pos)}"
+            )
             return response
         if len(request.rot_quat) != 4:
-            self.logger.error(f"rotation param does not fit " "required quaternion format:{str(req.rot_quat)}")
+            self.logger.error(
+                f"rotation param does not fit "
+                "required quaternion format:{str(req.rot_quat)}"
+            )
             return response
 
         vehicle = Vehicle(request.name, vehicle_spec["model"])
-        response.success = self.beamng().vehicles.spawn(vehicle, request.pos, request.rot_quat)
+        response.success = self.beamng().vehicles.spawn(
+            vehicle, request.pos, request.rot_quat
+        )
         if response.success:
             self._spawn_vehicle_node(vehicle, {"ros_sensors": [], "cosimulation": None})
         return response
@@ -165,7 +183,9 @@ class BeamNGBridge(Node):
         self._vehicles[vehicle.vid] = vehicle_node
 
     def _create_beamng_timer(self):
-        update_sec_beamng = self.get_parameter("update_sec_beamng").get_parameter_value().double_value
+        update_sec_beamng = (
+            self.get_parameter("update_sec_beamng").get_parameter_value().double_value
+        )
         return self.create_timer(update_sec_beamng, self.publisher_callback_beamng)
 
     def _remove_road_network(self):
@@ -181,7 +201,9 @@ class BeamNGBridge(Node):
         self._vehicles = {}
         self.running = False
 
-    def start_scenario(self, request: srv.StartScenario.Request, response: srv.StartScenario.Response):
+    def start_scenario(
+        self, request: srv.StartScenario.Request, response: srv.StartScenario.Response
+    ):
         response.success = False
         try:
             beamng = self.beamng()
@@ -197,10 +219,14 @@ class BeamNGBridge(Node):
         try:
             json_scenario = load_json(request.path_to_scenario_definition)
         except FileNotFoundError as e:
-            self.logger.error(f"File '{request.path_to_scenario_definition}' not found. Original error: {e}")
+            self.logger.error(
+                f"File '{request.path_to_scenario_definition}' not found. Original error: {e}"
+            )
             response.success = False
             return response
-        scenario, on_scenario_start, vehicle_list, vehicle_extra_data, flags = decode_scenario(json_scenario)
+        scenario, on_scenario_start, vehicle_list, vehicle_extra_data, flags = (
+            decode_scenario(json_scenario)
+        )
         scenario.make(beamng)
 
         beamng.scenario.load(scenario)
@@ -252,7 +278,9 @@ class BeamNGBridge(Node):
         request: srv.TeleportVehicle.Request,
         response: srv.TeleportVehicle.Response,
     ):
-        response.success = self.beamng().vehicles.teleport(request.vehicle_id, request.pos, request.rot_quat)
+        response.success = self.beamng().vehicles.teleport(
+            request.vehicle_id, request.pos, request.rot_quat
+        )
         return response
 
     def pause(
