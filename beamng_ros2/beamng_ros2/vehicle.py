@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from typing import Any, Callable, List, Tuple, cast
+from typing import List, Tuple, cast
 
 import beamng_msgs.srv as srv
 import numpy as np
@@ -121,15 +121,6 @@ class VehicleNode(Node):
         update_sec = self.get_parameter("update_sec").get_parameter_value().double_value
         return self.create_timer(update_sec, self.publisher_callback)
 
-    def create_timer(
-        self,
-        timer_period_sec: float,
-        callback: Callable[..., Any],
-        callback_group: CallbackGroup = None,
-        clock: Clock = None,
-    ) -> Timer:
-        return self.node.create_timer(timer_period_sec, callback, callback_group, clock)
-
     def destroy_node(self):
         if self.destroyed:
             return
@@ -137,7 +128,7 @@ class VehicleNode(Node):
         for sensor in self.sensors:
             sensor.remove()
         if self.timer:
-            self.timer.cancel()
+            self.destroy_timer(self.timer)
         if self._coupling_publisher:
             self._stop_cosimulation()
             self._coupling_publisher.stop()
