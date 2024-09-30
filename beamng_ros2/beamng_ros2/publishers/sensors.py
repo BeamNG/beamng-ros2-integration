@@ -916,7 +916,7 @@ class ElectricsPublisher(ClassicalSensorPublisher):
         msg.hoodlatchcoupler_notattached = data.get(
             "hoodLatchCoupler_notAttached", float("nan")
         )
-        msg.horn = data.get("horn", float("nan"))
+        msg.horn = float(data.get("horn", float("nan")))
         msg.idlerpm = data.get("idlerpm", float("nan"))
         msg.ignition = bool(data.get("ignition", False))
         msg.ignitionlevel = data.get("ignitionLevel", float("nan"))
