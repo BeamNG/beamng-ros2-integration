@@ -457,6 +457,8 @@ class IdealRadarPublisher(AutoSensorPublisher):
 
     def get_data(self, time: Time) -> msgs.IdealRadarSensor:
         data = self.poll()
+        if len(data) == 0:
+            return None
         if 0.0 in data:  # bulk data
             data = data[0.0]
         msg = msgs.IdealRadarSensor(
