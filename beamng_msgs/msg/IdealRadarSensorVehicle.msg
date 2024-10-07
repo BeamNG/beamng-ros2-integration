@@ -1,12 +1,12 @@
 int32 vehicle_id
-float64 dist_to_player_vehicle_sq
 float64 width
 float64 length
-geometry_msgs/Vector3 acc
-geometry_msgs/Vector3 vel
-float64 rel_acc_x
-float64 rel_acc_y
+float64 dist_to_player_vehicle_sq
 float64 rel_dist_x
 float64 rel_dist_y
+geometry_msgs/Vector3 vel_bb
 float64 rel_vel_x
 float64 rel_vel_y
+geometry_msgs/Vector3 acc
+float64 rel_acc_y
+float64 rel_acc_x

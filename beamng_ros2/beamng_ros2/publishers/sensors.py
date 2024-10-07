@@ -446,7 +446,7 @@ class IdealRadarPublisher(AutoSensorPublisher):
             width=veh["width"],
             length=veh["length"],
             acc=xyz_to_vec3(**veh["acc"]),
-            vel=xyz_to_vec3(**veh["vel"]),
+            vel_bb=xyz_to_vec3(**veh["velBB"]),
             rel_acc_x=veh["relAccX"],
             rel_acc_y=veh["relAccY"],
             rel_dist_x=veh["relDistX"],
@@ -680,6 +680,7 @@ class RadarPublisher(AutoSensorPublisher):
             returns=returns,
         )
         return msg
+
 
 class RoadsSensorPublisher(AutoSensorPublisher):
     """
