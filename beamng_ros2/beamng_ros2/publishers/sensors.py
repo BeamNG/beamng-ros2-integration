@@ -669,7 +669,7 @@ class RadarPublisher(AutoSensorPublisher):
             facing_factor=float(ret[6]),
         )
 
-    def get_data(self, time: Time) -> "RadarReturn":
+    def get_data(self, time: Time) -> msgs.RadarReturn:
         data = self.poll()
         if self.use_beamng_msg_type:
             returns = [self._return_to_beamng_msg(ret) for ret in data]
@@ -680,7 +680,6 @@ class RadarPublisher(AutoSensorPublisher):
             returns=returns,
         )
         return msg
-
 
 class RoadsSensorPublisher(AutoSensorPublisher):
     """

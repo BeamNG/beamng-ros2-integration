@@ -99,7 +99,10 @@
   },
   "roadssensor": {
     "default": {
-      "is_send_immediately": true
+      "is_send_immediately": true,
+      "gfx_update_time": 0.0,
+      "physics_update_time":  0.01,
+      "is_visualised":  false
     }
   },
   "ultrasonic": {
