@@ -189,7 +189,6 @@ class VehicleNode(Node):
                 self._visualizer.publish(time)
         except Exception as e:
             self.logger.error(f"Fatal error [{self.vehicle.vid}]: {str(e)}")
-            self.destroy_node()
 
     def _start_cosimulation(self, path_to_cosim_definition: str):
         try:
