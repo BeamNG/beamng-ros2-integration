@@ -214,40 +214,14 @@ class VehicleNode(Node):
         request: srv.StartCosimulation.Request,
         response: srv.StartCosimulation.Response,
     ):
-        # self._start_cosimulation(request.path_to_cosim_definition)
-        self.logger.error("Not implemented yet.")
-        """
-        To try the experimental cosimulation mode, you need to add the following code in your
-        `lua/vehicle/extensions/tech/techCore.lua` file:
-```
-M.handleStartCosimulation = function(request)
-  local cData = {{
-    signalsTo = request.signalsTo, signalsFrom = request.signalsFrom,
-    sensorMap = request.sensorMap,
-    time3rdParty = request.time3rdParty, pingTime = request.pingTime,
-    udpSendPort = request.udpSendPort, udpReceivePort = request.udpReceivePort,
-    udpSendIP = request.udpSendIP, udpReceiveIP = request.udpReceiveIP
-  }}
-  controller.loadControllerExternal('tech/cosimulationCoupling', 'cosimulationCoupling', lpack.encode(cData))
-
-  request:sendACK('CosimulationStarted')
-end
-
-M.handleStopCosimulation = function(request)
-  controller.getController('cosimulationCoupling').stop()
-  controller.unloadControllerExternal('cosimulationCoupling')
-  request:sendACK('CosimulationStopped')
-end
-```
-        """
-        response.success = False
+        response.success = self._start_cosimulation(request.path_to_cosim_definition)
+        return response
 
     def stop_cosimulation(
         self,
         request: srv.StopCosimulation.Request,
         response: srv.StopCosimulation.Response,
     ):
-        # self._stop_cosimulation()
-        self.logger.error("Not implemented yet.")
-        response.success = False
+        self._stop_cosimulation()
+        response.success = True
         return response
