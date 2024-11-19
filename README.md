@@ -70,17 +70,17 @@ To use this project, a basic knowledge of the BeamNG.tech simulator and the Beam
 
   Command prompt (`cmd.exe`):
   ```bat
-  Bin64\BeamNG.tech.x64.exe -console -nosteam -tcom-listen-ip <LISTEN_IP> -lua extensions.load('tech/techCore');tech_techCore.openServer(64256)
+  Bin64\BeamNG.tech.x64.exe -console -nosteam -tcom-listen-ip <LISTEN_IP> -lua extensions.tech_techCore.openServer(25252)
   ```
 
   PowerShell:
   ```posh
-  Bin64\BeamNG.tech.x64.exe -console -nosteam -tcom-listen-ip <LISTEN_IP> -lua "extensions.load('tech/techCore');tech_techCore.openServer(64256)"
+  Bin64\BeamNG.tech.x64.exe -console -nosteam -tcom-listen-ip <LISTEN_IP> -lua "extensions.tech_techCore.openServer(25252)"
   ```
 
   Linux Terminal:
   ```bash
-  BinLinux/BeamNG.tech.x64 -nosteam -tcom-listen-ip <LISTEN_IP> -lua "extensions.load('tech/techCore');tech_techCore.openServer(64256)"
+  BinLinux/BeamNG.tech.x64 -nosteam -tcom-listen-ip <LISTEN_IP> -lua "extensions.tech_techCore.openServer(25252)"
   ```
 
   `<LISTEN_IP>` will be `127.0.0.1` in the case of running BeamNG.tech on the same machine and operating system as the ROS2 interface. If you are running ROS2 using WSL or want to connect to a remote machine, you need to set the listen IP to the one of the corresponding network interface.

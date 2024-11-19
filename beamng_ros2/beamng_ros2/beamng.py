@@ -53,7 +53,7 @@ class BeamNGBridge(Node):
         super().__init__("beamng_bridge")
 
         self.declare_parameter("host", "127.0.0.1")
-        self.declare_parameter("port", 64256)
+        self.declare_parameter("port", 25252)
         self.declare_parameter("launch", True)
         self.declare_parameter("update_sec", 1 / 30)
         self.declare_parameter("update_sec_beamng", 10.0)
@@ -343,7 +343,7 @@ def main(params: List[Parameter] | None = None, args=None):
 if __name__ == "__main__":
     parser = argparse.ArgumentParser("beamng_bridge")
     parser.add_argument("--host", type=str, default="127.0.0.1")
-    parser.add_argument("--port", type=int, default=64256)
+    parser.add_argument("--port", type=int, default=25252)
     parser.add_argument("--launch", action="store_false")
     parser.add_argument("--update_sec", type=float, default=0.1)
 

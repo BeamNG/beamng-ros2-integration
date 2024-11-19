@@ -24,7 +24,7 @@ def generate_launch_description():
             output='screen',
             parameters=[
                 {'host': '172.21.192.1'}, #127.0.0.1
-                {'port': 64256},
+                {'port': 25252},
                 {'launch': False},
                 {'update_sec': 0.1}
             ]

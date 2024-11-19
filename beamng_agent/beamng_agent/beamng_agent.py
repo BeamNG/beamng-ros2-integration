@@ -21,7 +21,7 @@ class VehicleControlNode(Node):
         super().__init__(NODE_NAME)
 
         host = self.declare_parameter("host", "172.21.192.1").value
-        port = self.declare_parameter("port", 64256).value
+        port = self.declare_parameter("port", 25252).value
         self.driving_mode = self.declare_parameter("driving_mode", "keyboard").value
         vehicle_id = self.declare_parameter("vehicle_id", "ego").value
 

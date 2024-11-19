@@ -10,7 +10,7 @@ def generate_launch_description():
             output='screen',
             parameters=[
                 {'host': '172.21.192.1'},
-                {'port': 64256},
+                {'port': 25252},
                 {'driving_mode': 'keyboard'},
                 {'vehicle_id': 'ego'}
             ]
