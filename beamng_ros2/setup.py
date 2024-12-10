@@ -22,7 +22,7 @@ def generate_data_files():
 setup(
     name=package_name,
     packages=find_packages(),
-    version="1.1.0",
+    version="1.2.0",
     data_files=[
         ("share/ament_index/resource_index/packages", ["resource/" + package_name]),
         ("share/" + package_name, ["package.xml"]),
