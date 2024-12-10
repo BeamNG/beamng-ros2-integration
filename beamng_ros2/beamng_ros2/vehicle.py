@@ -89,6 +89,7 @@ class VehicleNode(Node):
         self.logger = self.get_logger()
         self.declare_parameter("static_broadcast_steps", 100)
         self.declare_parameter("update_sec", 1 / 30)
+        self.next_static_broadcast = 0
         self.vehicle = vehicle
         self.node = parent
         self.destroyed = False
@@ -108,7 +109,6 @@ class VehicleNode(Node):
         self._create_publishers()
         self._tf_broadcaster = TransformBroadcaster(self)
         self._tf_static_broadcaster = StaticTransformBroadcaster(self)
-        self.next_static_broadcast = 0
 
         self._coupling_publisher: CouplingPublisher | None = None
         if cosimulation:
