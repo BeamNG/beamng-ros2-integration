@@ -566,6 +566,8 @@ class MeshPublisher(AutoSensorPublisher):
 
     def get_data(self, time: Time) -> msgs.MeshSensor:
         data = self.poll()
+        if len(data) == 0:
+            return None
         msg = msgs.MeshSensor(
             header=self._make_header(time, self.vehicle.vid),
             beams=[
