@@ -74,7 +74,6 @@ def beamng_vec_to_ros_coords(vec: Float3) -> Float3:
     return (-vec[1], vec[0], vec[2])
 
 
-@staticmethod
 def quat_from_dir(vec) -> np.ndarray:
     b = vec / np.linalg.norm(vec)
     a = np.array((1.0, 0.0, 0.0))  # forward vector of a vehicle in ROS space
