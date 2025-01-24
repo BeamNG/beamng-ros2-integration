@@ -86,6 +86,7 @@ To use this project, a basic knowledge of the BeamNG.tech simulator and the Beam
   `<LISTEN_IP>` will be `127.0.0.1` in the case of running BeamNG.tech on the same machine and operating system as the ROS2 interface. If you are running ROS2 using WSL or want to connect to a remote machine, you need to set the listen IP to the one of the corresponding network interface.
 
 2. The ROS2 packages from this repository need to be added and built in your colcon workspace. See the [ROS2 tutorials](https://docs.ros.org/en/humble/Tutorials.html) for more information on how to set up a colcon workspace.
+   If you use ROS2 on Windows (without WSL), the `rosdep` command does not work, you will have to skip installing dependencies or install them manually. The integration should still work on that configuration.
 
   ```bash
   source /opt/ros/humble/setup.bash
@@ -96,7 +97,7 @@ To use this project, a basic knowledge of the BeamNG.tech simulator and the Beam
   colcon build # or colcon build --symlink-install
   ```
 
-3. A node connecting ROS2 to the simulation can be started using the `ros2 run` command:
+1. A node connecting ROS2 to the simulation can be started using the `ros2 run` command:
 
   ```bash
   ros2 run beamng_ros2 beamng_bridge
