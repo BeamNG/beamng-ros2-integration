@@ -8,7 +8,6 @@
 
   <!-- Build dependencies -->
   <buildtool_depend>ament_cmake</buildtool_depend>
-  <build_depend>ament_python</build_depend>
   <build_depend>rclpy</build_depend>
   <build_depend>std_msgs</build_depend>
   <build_depend>beamng_msgs</build_depend>  <!-- Ensure beamng_msgs is listed as a build dependency -->
@@ -16,7 +15,6 @@
   <!-- Execution dependencies -->
   <exec_depend>rclpy</exec_depend>
   <exec_depend>std_msgs</exec_depend>
-  <exec_depend>beamngpy</exec_depend>
   <exec_depend>beamng_msgs</exec_depend>   <!-- Execution dependency for beamng_msgs -->
 
   <export>
