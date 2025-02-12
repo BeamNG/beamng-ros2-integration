@@ -1,5 +1,11 @@
 # BeamNG ROS2 Integration
 
+[![Documentation](https://img.shields.io/badge/Documentation-blue?logo=readthedocs&logoColor=white)](https://beamngpy.readthedocs.io/en/latest/_static/beamng_ros2)
+[![Messages](https://img.shields.io/badge/Messages-grey?logo=readthedocs&logoColor=white)](https://beamngpy.readthedocs.io/en/latest/_static/beamng_msgs/)
+[![Repository](https://img.shields.io/badge/Repository-grey?logo=github&logoColor=white)](https://github.com/BeamNG/beamng-ros2-integration)
+
+This integration is for ROS2, for ROS1 check [BeamNG ROS Integration](https://github.com/BeamNG/beamng-ros-integration).
+
 ## About
 
 This repository contains packages to support the interoperability between [BeamNG.tech](https://beamng.tech/) and [ROS2](https://www.ros.org/).
@@ -27,9 +33,9 @@ For inquiries regarding commercial use, contact us at <licensing@beamng.gmbh>.
 <a name="docs"></a>
 
 ## Documentation
-The documentation is generated using `rosdoc2` and can be found at [https://beamngpy.readthedocs.io/en/latest/_static/beamng_ros2](https://beamngpy.readthedocs.io/en/latest/_static/beamng_ros2).
-
-The [list of ROS2 messages, services and actions](https://beamngpy.readthedocs.io/en/latest/_static/beamng_msgs/) is also available online.
+The documentation is generated using `rosdoc2` and can be found online:
+* [Documentation: beamng_ros2](https://beamngpy.readthedocs.io/en/latest/_static/beamng_ros2)
+* [Messages, services and actions: beamng_msgs](https://beamngpy.readthedocs.io/en/latest/_static/beamng_msgs/)
 
 ## Features
 
