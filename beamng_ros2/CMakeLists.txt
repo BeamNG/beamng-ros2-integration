@@ -10,23 +10,45 @@ if(NOT CMAKE_CXX_STANDARD)
 endif()
 
 if(CMAKE_COMPILER_IS_GNUCXX OR CMAKE_CXX_COMPILER_ID MATCHES "Clang")
-  add_compile_options(-Wall -Wextra -Wpedantic)
+  add_compile_options(
+    -Wall
+    -Wextra
+    -Wpedantic
+    -fvisibility=hidden
+  )
 endif()
 
 # find dependencies
 find_package(ament_cmake REQUIRED)
 find_package(rclcpp REQUIRED)
+find_package(std_msgs REQUIRED)
+find_package(geometry_msgs REQUIRED)
+find_package(tf2 REQUIRED)
+find_package(tf2_ros REQUIRED)
 
-add_executable(beamng_bridge src/beamng_bridge.cpp)
-ament_target_dependencies(beamng_bridge
-  rclcpp
+set(BEAMNG_LIBRARY ros2_beamng)
+
+add_library(${BEAMNG_LIBRARY} SHARED
+  src/init.cpp
+  src/beamng_node.cpp
+  src/vehicle_node.cpp
 )
-target_include_directories(beamng_bridge PUBLIC
+target_include_directories(${BEAMNG_LIBRARY} PUBLIC
   $<BUILD_INTERFACE:${CMAKE_CURRENT_SOURCE_DIR}/include>
   $<INSTALL_INTERFACE:include>)
-target_compile_features(beamng_bridge PUBLIC c_std_99 cxx_std_17)  # Require C99 and C++17
+target_compile_features(${BEAMNG_LIBRARY} PUBLIC c_std_99 cxx_std_17)  # Require C99 and C++17
+target_compile_definitions(${BEAMNG_LIBRARY} PUBLIC
+  BNG_ROS2_COMPILING
+)
+ament_target_dependencies(${BEAMNG_LIBRARY}
+  rclcpp
+  std_msgs
+  geometry_msgs
+  tf2
+  tf2_ros
+)
 
-install(TARGETS beamng_bridge
+install(TARGETS ${BEAMNG_LIBRARY}
   DESTINATION lib/${PROJECT_NAME})
 
 if(BUILD_TESTING)
