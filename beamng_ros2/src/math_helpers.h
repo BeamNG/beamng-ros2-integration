@@ -1,26 +1,32 @@
 #pragma once
-#include "geometry_msgs/msg/quaternion.hpp"
-#include "geometry_msgs/msg/vector3.h"
+#include <geometry_msgs/msg/quaternion.h>
+#include <geometry_msgs/msg/vector3.h>
+#include <std_msgs/msg/color_rgba.h>
+#include <tf2_geometry_msgs/tf2_geometry_msgs.hpp>
 
 namespace bng_ros2 {
 
-geometry_msgs::msg::Vector3 beamng_pos_to_ros_coords(double pos[3]) {
-    geometry_msgs::msg::Vector3 translation;
-    translation.x = -pos[1];
-    translation.y = pos[0];
-    translation.z = pos[2];
-    return translation;
+inline geometry_msgs::msg::Quaternion quat_forward() {
+  geometry_msgs::msg::Quaternion quat;
+  quat.w = 1.0;
+  return quat;
 }
 
-geometry_msgs::msg::Quaternion beamng_rot_to_ros_coords(double rot[4]) {
-    double x = 0.7071067811865476; // sqrt(2)/2
-
-    geometry_msgs::msg::Quaternion quat;
-    quat.x = x * (rot[1] - rot[0]);
-    quat.y = -x * (rot[0] + rot[1]);
-    quat.z = -x * (rot[2] + rot[3]);
-    quat.w =  x * (rot[3] - rot[2]);
-    return quat;
+inline tf2::Vector3 to_vec3(double vec[3]) {
+  return tf2::Vector3(vec[0], vec[1], vec[2]);
 }
 
+inline tf2::Quaternion to_quat(double rot[4]) {
+  return tf2::Quaternion(rot[0], rot[1], rot[2], rot[3]);
 }
+
+inline std_msgs::msg::ColorRGBA to_rgba(double color[4]) {
+  std_msgs::msg::ColorRGBA rgba;
+  rgba.r = color[0];
+  rgba.g = color[1];
+  rgba.b = color[2];
+  rgba.a = color[3];
+  return rgba;
+}
+
+}  // namespace bng_ros2
