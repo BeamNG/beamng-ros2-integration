@@ -65,7 +65,7 @@ intersphinx_mapping = {
     "rclpy": ("https://docs.ros.org/en/iron/p/rclpy/", None),
     "sensor_msgs": ("https://docs.ros.org/en/humble/p/sensor_msgs/", None),
     "std_msgs": ("https://docs.ros.org/en/humble/p/std_msgs/", None),
-    "radar_msgs": ("https://docs.ros.org/en/humble/p/std_msgs/", None),
+    "radar_msgs": ("https://index.ros.org/p/radar_msgs/", None),
     "viz_msgs": (
         "https://docs.ros.org/en/humble/p/visualization_msgs/",
         None,
