@@ -10,9 +10,9 @@ deploy-pages:
   script:
     - bash build_docs_ci.sh
   pages: true  # specifies that this is a Pages job
-  publish: docs_build  # should be nested under "pages" property starting from GitLab 17.9
+  publish: docs_output  # should be nested under "pages" property starting from GitLab 17.9
   artifacts:
     paths:
-      - docs_build
+      - docs_output
   only:
     - dev
