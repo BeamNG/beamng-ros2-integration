@@ -163,3 +163,7 @@ cython_debug/
 # rosdoc
 cross_reference
 docs*
+
+# ros workspace directories
+/install
+/log
