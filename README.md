@@ -52,9 +52,12 @@ For sensor shared memory support, BeamNG.tech and ROS have to be running on the 
 The BeamNG ROS2 integration is tested with the following ROS2 distributions: [Foxy Fitzroy](https://docs.ros.org/en/foxy) and [Humble Hawksbill](https://docs.ros.org/en/humble/index.html).
 
 ### Steps
-1. Setup your ROS2 Humble/Foxy workspace.
+1. Setup your ROS2 Humble/Foxy workspace. See
+   * [Install ROS Humble](https://docs.ros.org/en/humble/Installation/Ubuntu-Install-Debs.html)
+   * [Setup ROS workspace](https://docs.ros.org/en/humble/Tutorials/Beginner-Client-Libraries/Colcon-Tutorial.html)
 2. Clone this repository into your ROS2 workspace.
-3. Use [rosdep](https://docs.ros.org/en/humble/Tutorials/Intermediate/Rosdep.html#rosdep-operation) to install the dependencies for the package.
+3. Use [rosdep](https://docs.ros.org/en/humble/Tutorials/Intermediate/Rosdep.html#rosdep-operation) to install the dependencies for the package. See:
+   * [How do I use the rosdep tool](https://docs.ros.org/en/humble/Tutorials/Intermediate/Rosdep.html#how-do-i-use-the-rosdep-tool)
 4. Install `beamngpy` using pip or conda in the Python environment you use to run the ROS2 nodes.
 5. To run the bridge, run `ros2 run beamng_ros2 beamng_bridge`.
 
