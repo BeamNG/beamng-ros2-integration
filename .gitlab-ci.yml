@@ -1,0 +1,18 @@
+default:
+  image: ros:humble-ros-base-jammy
+  tags:
+    - docker
+
+deploy-pages:
+  stage: deploy
+  variables:
+    GIT_STRATEGY: clone  # use fresh clone of repository (avoiding any old branches)
+  script:
+    - bash build_docs_ci.sh
+  pages: true  # specifies that this is a Pages job
+  publish: docs_build  # should be nested under "pages" property starting from GitLab 17.9
+  artifacts:
+    paths:
+      - docs_build
+  only:
+    - dev
