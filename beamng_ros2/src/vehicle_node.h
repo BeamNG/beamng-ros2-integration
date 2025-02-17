@@ -19,8 +19,7 @@ class VehicleNode : public rclcpp::Node {
  public:
   VehicleNode(const std::string& name);
   void broadcast_tf(double pos[3], double rot[4]);
-  void set_data(double scale[3], double offset[3], double color[4],
-                double arrow_color[4]);
+  void set_data(double scale[3], double color[4], double arrow_color[4]);
   void publish();
 
  private:
@@ -44,7 +43,7 @@ extern "C" {
 BNG_ROS2_API void bngros2_broadcast_tf(uint32_t id, double pos[3],
                                        double rot[4]);
 BNG_ROS2_API void bngros2_vehicle_set_data(uint32_t id, double scale[3],
-                                           double offset[3], double color[4],
+                                           double color[4],
                                            double arrow_color[4]);
 BNG_ROS2_API void bngros2_vehicle_publish(uint32_t id);
 }

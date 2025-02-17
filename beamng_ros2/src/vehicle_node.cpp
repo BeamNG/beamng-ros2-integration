@@ -27,12 +27,9 @@ void VehicleNode::broadcast_tf(double pos[3], double rot[4]) {
   tf_broadcaster_->sendTransform(t);
 }
 
-void VehicleNode::set_data(double scale[3], double offset[3], double color[4],
+void VehicleNode::set_data(double scale[3], double color[4],
                            double arrow_color[4]) {
   data_.scale = to_vec3(scale);
-  data_.offset.x = offset[0];
-  data_.offset.y = offset[1];
-  data_.offset.z = offset[2];
   data_.color = to_rgba(color);
   data_.arrow_color = to_rgba(arrow_color);
 }
@@ -49,7 +46,6 @@ void VehicleNode::publish() {
   vehicle.type = visualization_msgs::msg::Marker::CUBE;
   vehicle.action = visualization_msgs::msg::Marker::ADD;
   vehicle.pose.orientation = quat_forward();
-  vehicle.pose.position = data_.offset;
   vehicle.scale = tf2::toMsg(data_.scale);
   vehicle.color = data_.color;
   vehicle.lifetime.sec = 5.0;
@@ -62,7 +58,6 @@ void VehicleNode::publish() {
   arrow.type = visualization_msgs::msg::Marker::ARROW;
   arrow.action = visualization_msgs::msg::Marker::ADD;
   arrow.pose.orientation = quat_forward();
-  arrow.pose.position = data_.offset;
   arrow.pose.position.x += data_.scale[0] / 2;
   arrow.scale = tf2::toMsg(tf2::Vector3(2.0, 1.0, 1.0));
   arrow.color = data_.arrow_color;
@@ -137,11 +132,11 @@ BNG_ROS2_API void bngros2_broadcast_tf(uint32_t id, double pos[3],
 }
 
 BNG_ROS2_API void bngros2_vehicle_set_data(uint32_t id, double scale[3],
-                                           double offset[3], double color[4],
+                                           double color[4],
                                            double arrow_color[4]) {
   auto it = nodes.find(id);
   if (it == nodes.end()) {
     return;
   }
-  it->second->set_data(scale, offset, color, arrow_color);
+  it->second->set_data(scale, color, arrow_color);
 }
