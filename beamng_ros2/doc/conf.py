@@ -12,6 +12,7 @@
 #
 import os
 import sys
+import beamngpy  # needed for running sphinx-build because a later automatic import fails due to strange environment issue
 
 # -- Project information -----------------------------------------------------
 
