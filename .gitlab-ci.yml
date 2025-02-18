@@ -8,7 +8,7 @@ deploy-pages:
   variables:
     GIT_STRATEGY: clone  # use fresh clone of repository (avoiding any old branches)
   script:
-    - bash build_docs.sh
+    - bash docs/build.sh
   pages: true  # specifies that this is a Pages job
   publish: docs_output  # should be nested under "pages" property starting from GitLab 17.9
   artifacts:

@@ -1,4 +1,5 @@
 #!/bin/bash
+# Build documentation
 # This script can run inside a Docker container using the ros:humble-ros-base-jammy image
 # Run container:
 # sudo docker run --rm -v $PWD:/repo -w /repo ros:humble-ros-base-jammy bash build_docs_ci.sh
