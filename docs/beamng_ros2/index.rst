@@ -14,8 +14,3 @@ Integration of BeamNG.tech into the ROS2 ecosystem.
    :maxdepth: 2
 
    Documentation <user_docs>
-
-.. toctree::
-   :hidden:
-
-   genindex

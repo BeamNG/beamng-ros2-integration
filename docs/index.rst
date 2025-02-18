@@ -8,3 +8,8 @@ Integration of BeamNG.tech into the ROS2 ecosystem.
 
    beamng_ros2/index.rst
    beamng_msgs/index.rst
+
+.. toctree::
+   :hidden:
+
+   genindex
