@@ -1,21 +1,9 @@
-beamng_ros2
+BeamNG-ROS2
 ===========
 
 Integration of BeamNG.tech into the ROS2 ecosystem.
 
 .. toctree::
-   :maxdepth: 2
+   :maxdepth: 3
 
-   Python API <modules>
-   Standard Documents <standards>
-
-.. toctree::
-   :titlesonly:
-   :maxdepth: 2
-
-   Documentation <user_docs>
-
-.. toctree::
-   :hidden:
-
-   genindex
+   beamng_ros2_package.rst
