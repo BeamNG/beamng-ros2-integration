@@ -18,6 +18,29 @@ colcon build --symlink-install
 source install/setup.bash
 
 # Create docs
-rosdoc2 build -p beamng_ros2
-rosdoc2 build -p beamng_msgs
-cp media/root_template.html docs_output/index.html
+
+# Option 1: Old workflow - this directly uses the rosdoc2 CLI interface to generate docs for single ROS packages
+# Disadvantages: it generates two sets of independent HTML files (one for each ROS package)
+# Advantages: out of the box solution
+# This option is currently disabled.
+if false; then
+    rosdoc2 build -p beamng_ros2
+    rosdoc2 build -p beamng_msgs
+fi
+
+# Option 2: New workflow - this uses a customized Sphinx config and builds upon some rosdoc2 internal functions
+# Advantages: Single (combined) documentation for multiple ROS packages, fully customizable, compatible with sphinx-multiversion
+# Disadvantages: uses a more manual setup
+SOURCE_DIR=docs
+BUILD_DIR=docs_build
+OUTPUT_DIR=docs_output
+rm -rf $BUILD_DIR $OUTPUT_DIR
+cp -r $SOURCE_DIR $BUILD_DIR
+cp README.md $BUILD_DIR/README.md
+sphinx-apidoc -e -o $BUILD_DIR/beamng_ros2 beamng_ros2/beamng_ros2
+mkdir $BUILD_DIR/beamng_ros2/standard_docs/original
+cp beamng_ros2/package.xml $BUILD_DIR/beamng_ros2/standard_docs/original/package.xml
+mkdir $BUILD_DIR/beamng_msgs/standard_docs/original
+cp beamng_msgs/package.xml $BUILD_DIR/beamng_msgs/standard_docs/original/package.xml
+python3 $SOURCE_DIR/msg_doc.py
+sphinx-build $BUILD_DIR $OUTPUT_DIR
