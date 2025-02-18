@@ -33,5 +33,12 @@ fi
 # Advantages: Single (combined) documentation for multiple ROS packages, fully customizable, compatible with sphinx-multiversion
 # Disadvantages: uses a more manual setup
 git config --global --add safe.directory $PWD
+git fetch origin main:main
+if [ "$USE_DEV_BRANCH" == "true" ]; then
+    git fetch origin dev:dev
+    BRANCH="dev"
+else
+    BRANCH="main"
+fi
 sphinx-multiversion docs docs_output
-python3 docs/generate_index.py dev docs_output/index.html
+python3 docs/generate_index.py $BRANCH docs_output/index.html
