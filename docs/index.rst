@@ -9,6 +9,7 @@ Integration of BeamNG.tech into the ROS2 ecosystem.
    Introduction <README.md>
    beamng_ros2/index.rst
    beamng_msgs/index.rst
+   changelog.rst
 
 .. toctree::
    :hidden:
