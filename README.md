@@ -15,7 +15,6 @@ For inquiries regarding commercial use, contact us at <licensing@beamng.gmbh>.
 
 ## Table of Contents
 
-- [Documentation](#docs)
 - [Features](#features)
 - [Prerequisites](#prereqs)
   - [Steps](#steps)
@@ -26,13 +25,6 @@ For inquiries regarding commercial use, contact us at <licensing@beamng.gmbh>.
 - [Troubleshooting](#troubleshooting)
   - [Known Issues](#known-issues)
 - [Contributions](#contributions)
-
-<a name="docs"></a>
-
-## Documentation
-The documentation is generated using `rosdoc2` and can be found online:
-* [Documentation: beamng_ros2](https://beamngpy.readthedocs.io/en/latest/_static/beamng_ros2)
-* [Messages, services and actions: beamng_msgs](https://beamngpy.readthedocs.io/en/latest/_static/beamng_msgs/)
 
 ## Features
 
