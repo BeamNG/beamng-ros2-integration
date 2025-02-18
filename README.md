@@ -15,20 +15,17 @@ For inquiries regarding commercial use, contact us at <licensing@beamng.gmbh>.
 
 ## Table of Contents
 
-- [BeamNG ROS2 Integration](#beamng-ros2-integration)
-  - [About](#about)
-  - [Table of Contents](#table-of-contents)
-  - [Documentation](#documentation)
-  - [Features](#features)
-  - [Prerequisites](#prerequisites)
-    - [Steps](#steps)
-    - [Optional Dependencies](#optional-dependencies)
-  - [Getting Started](#getting-started)
-    - [Steps](#steps-1)
-  - [Compatibility](#compatibility)
-  - [Troubleshooting](#troubleshooting)
-    - [Known Issues](#known-issues)
-  - [Contributions](#contributions)
+- [Documentation](#docs)
+- [Features](#features)
+- [Prerequisites](#prereqs)
+  - [Steps](#steps)
+  - [Optional Dependencies](#optional-dependencies)
+- [Getting Started](#getstart)
+  - [Steps](#steps)
+- [Compatibility](#compatibility)
+- [Troubleshooting](#troubleshooting)
+  - [Known Issues](#known-issues)
+- [Contributions](#contributions)
 
 <a name="docs"></a>
 
@@ -50,6 +47,8 @@ For using the BeamNG ROS2 integration, a BeamNG.tech build and a Python environm
 For sensor shared memory support, BeamNG.tech and ROS have to be running on the **same machine** and the **same operating system** (Windows Subsystem for Linux will not work with shared memory). Shared memory on Linux is **not working** in the current BeamNG.tech release and the support will come in the next major update.
 
 The BeamNG ROS2 integration is tested with the following ROS2 distributions: [Foxy Fitzroy](https://docs.ros.org/en/foxy) and [Humble Hawksbill](https://docs.ros.org/en/humble/index.html).
+
+<a name="steps"></a>
 
 ### Steps
 1. Setup your ROS2 Humble/Foxy workspace. See
