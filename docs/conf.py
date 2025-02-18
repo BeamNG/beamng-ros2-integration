@@ -49,6 +49,7 @@ extensions = [
     "sphinx.ext.intersphinx",
     "sphinx.ext.extlinks",
     "myst_parser",
+    "sphinx_multiversion",
 ]
 
 # Add any paths that contain templates here, relative to this directory.
@@ -122,3 +123,7 @@ extlinks = {
         "%s",
     )
 }
+
+# -- Multi-version config ----------------------------------------------------
+smv_tag_whitelist = r'^v.*$'
+smv_branch_whitelist = r'^(main|dev)$'

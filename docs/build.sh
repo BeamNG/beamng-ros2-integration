@@ -9,7 +9,7 @@ set -eo pipefail
 # Install dependencies
 apt update
 apt install python3-pip -y
-pip install beamngpy rosdoc2
+pip install beamngpy rosdoc2 sphinx-multiversion
 
 # Cleanup
 rm -rf install log build docs_output docs_build cross_reference
@@ -32,4 +32,5 @@ fi
 # Option 2: New workflow - this uses a customized Sphinx config and builds upon some rosdoc2 internal functions
 # Advantages: Single (combined) documentation for multiple ROS packages, fully customizable, compatible with sphinx-multiversion
 # Disadvantages: uses a more manual setup
-sphinx-build docs docs_output
+git config --global --add safe.directory $PWD
+sphinx-multiversion docs docs_output
