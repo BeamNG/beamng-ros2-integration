@@ -34,3 +34,4 @@ fi
 # Disadvantages: uses a more manual setup
 git config --global --add safe.directory $PWD
 sphinx-multiversion docs docs_output
+python3 docs/generate_index.py dev docs_output/index.html
