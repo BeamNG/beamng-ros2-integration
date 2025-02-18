@@ -12,7 +12,24 @@
 #
 import os
 import sys
-import beamngpy  # needed for running sphinx-build because a later automatic import fails due to strange environment issue
+from pathlib import Path
+
+
+# -- Run pre-build steps -----------------------------------------------------
+sys.path.append(str(Path(".").resolve()))
+
+from pre_build import pre_build, cleanup
+
+def setup(app):
+    root_dir = str(Path(f"{app.srcdir}/..").resolve())
+    pre_build(root_dir, app.srcdir, app.outdir)
+
+    def build_finished(app, exception):
+        if not exception:
+            cleanup(root_dir, app.srcdir, app.outdir)
+
+    app.connect('build-finished', build_finished)
+
 
 # -- Project information -----------------------------------------------------
 

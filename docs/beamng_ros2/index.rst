@@ -6,7 +6,7 @@ Integration of BeamNG.tech into the ROS2 ecosystem.
 .. toctree::
    :maxdepth: 2
 
-   Python API <modules>
+   Python API <api/modules>
    Standard Documents <standards>
 
 .. toctree::
