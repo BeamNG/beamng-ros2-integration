@@ -24,7 +24,6 @@ def run_api_doc(root_dir, source_dir, output_dir):
 
 def copy_files(root_dir, source_dir, output_dir):
     files = [
-        (f"{root_dir}/README.md", f"{source_dir}/README.md"),
         (f"{root_dir}/beamng_ros2/package.xml", f"{source_dir}/beamng_ros2/standard_docs/original/package.xml"),
         (f"{root_dir}/beamng_msgs/package.xml", f"{source_dir}/beamng_msgs/standard_docs/original/package.xml"),
     ]
@@ -46,7 +45,6 @@ def generate_msgs_interface(root_dir, source_dir, output_dir):
 
 def cleanup(root_dir, source_dir, output_dir):
     items = [
-        f"{source_dir}/README.md",
         f"{source_dir}/beamng_ros2/standard_docs/original",
         f"{source_dir}/beamng_msgs/standard_docs/original",
         f"{source_dir}/beamng_ros2/api",
