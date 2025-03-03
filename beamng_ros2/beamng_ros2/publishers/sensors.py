@@ -315,12 +315,9 @@ class CameraPublisher(AutoSensorPublisher):
     def msg_type(self) -> Type:
         return sensor_msgs.Image
 
-    def _get_img_from_rgba(self, data: bytes, time: Time) -> sensor_msgs.Image:
+    def _get_img_from_rgb(self, data: bytes, time: Time, palette: bool) -> sensor_msgs.Image:
         cam: sensors.Camera = self.sensor
-        decoded = np.frombuffer(data, dtype=np.uint8).reshape(
-            cam.resolution[1], cam.resolution[0], 4
-        )
-        decoded = decoded[..., :3]  # rgba -> rgb
+        decoded = cam._convert_to_image(data, cam.resolution[0], cam.resolution[1], palette=palette, force_ndarray=True)
         return sensor_msgs.Image(
             header=self._make_header(time),
             height=cam.resolution[1],
@@ -333,11 +330,16 @@ class CameraPublisher(AutoSensorPublisher):
 
     def _get_img_from_depth(self, data: bytes, time: Time) -> sensor_msgs.Image:
         cam: sensors.Camera = self.sensor
-        depth = np.frombuffer(data, dtype=np.float32)
+        if cam.integer_depth:
+            depth = np.frombuffer(data, dtype=np.uint8)
+        else:
+            depth = np.frombuffer(data, dtype=np.float32)
         if cam.postprocess_depth:
             depth = cam.depth_buffer_processing(depth)
-        else:
+        elif not cam.integer_depth:
             depth = np.clip(depth * 255.0, 0.0, 255.0)
+        if cam.is_depth_inverted:
+            depth = 255 - depth
         depth = np.array(depth, dtype=np.uint8)
 
         return sensor_msgs.Image(
@@ -382,9 +384,11 @@ class CameraPublisher(AutoSensorPublisher):
             data = self.sensor.stream_raw()
         else:
             data = self.sensor.poll_raw()
-        for key in ["colour", "annotation", "instance"]:
+        if "colour" in self._publishers and data["colour"]:
+            self._publishers[key].publish(self._get_img_from_rgb(data[key], time, palette=False))
+        for key in ["annotation", "instance"]:
             if key in self._publishers and data[key]:
-                self._publishers[key].publish(self._get_img_from_rgba(data[key], time))
+                self._publishers[key].publish(self._get_img_from_rgb(data[key], time, palette=True))
         if "depth" in self._publishers and data["depth"]:
             self._publishers["depth"].publish(
                 self._get_img_from_depth(data["depth"], time)
