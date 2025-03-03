@@ -501,31 +501,10 @@ class LidarPublisher(AutoSensorPublisher):
     def get_data(self, time: Time) -> sensor_msgs.PointCloud2:
         self.sensor = cast(sensors.Lidar, self.sensor)
         data = self.sensor.poll()
-        
-        # Handle colours: check if it's a list and reshape appropriately
         if isinstance(data["colours"], list):
-            # Attempt to reshape into (-1, 4). If fails, default to (-1, 3)
-            try:
-                data["colours"] = np.array(data["colours"]).reshape(-1, 4)
-            except ValueError:
-                data["colours"] = np.array(data["colours"]).reshape(-1, 3)
-        
+            data["colours"] = np.array(data["colours"]).reshape(-1, 4)
         points = cast(np.ndarray, data["pointCloud"])
-        colours = cast(np.ndarray, data["colours"])
-        
-        # Check the number of channels in colours
-        if colours.shape[1] == 4:
-            # RGBA -> BGRA
-            colours = colours[:, [2, 1, 0, 3]]
-            point_step = points.itemsize * 4  # Assuming float32
-        elif colours.shape[1] == 3:
-            # RGB -> BGR + add alpha channel
-            alpha = np.full((colours.shape[0], 1), 255, dtype=colours.dtype)  # Default alpha
-            colours = np.hstack((colours[:, [2, 1, 0]], alpha))
-            point_step = points.itemsize * 4
-        else:
-            raise ValueError(f"Unexpected number of color channels: {colours.shape[1]}")
-
+        colours = cast(np.ndarray, data["colours"])[:, [2, 1, 0, 3]]  # RGBA -> BGRA
         lidar_data = np.column_stack(
             (points, colours.flatten().view("float32"))
         ).tobytes()
@@ -553,8 +532,8 @@ class LidarPublisher(AutoSensorPublisher):
             width=width,
             fields=fields,
             is_bigendian=False,
-            point_step=point_step,
-            row_step=(point_step * width),
+            point_step=(itemsize * 4),
+            row_step=(itemsize * 4 * width),
             data=lidar_data,
             is_dense=False,
         )
