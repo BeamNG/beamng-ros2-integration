@@ -502,9 +502,11 @@ class LidarPublisher(AutoSensorPublisher):
         self.sensor = cast(sensors.Lidar, self.sensor)
         data = self.sensor.poll()
         if isinstance(data["colours"], list):
-            data["colours"] = np.array(data["colours"]).reshape(-1, 4)
+            data["colours"] = np.array(data["colours"]).reshape(-1, 3)
         points = cast(np.ndarray, data["pointCloud"])
-        colours = cast(np.ndarray, data["colours"])[:, [2, 1, 0, 3]]  # RGBA -> BGRA
+        colours = cast(np.ndarray, data["colours"])
+        colours = colours[:, [2, 1, 0]]  # RGB -> BGR
+        colours = np.hstack((colours, np.full((colours.shape[0], 1), 255))) # BGR -> BGRA
         lidar_data = np.column_stack(
             (points, colours.flatten().view("float32"))
         ).tobytes()
