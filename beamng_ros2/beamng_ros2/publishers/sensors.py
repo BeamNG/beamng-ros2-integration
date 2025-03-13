@@ -384,7 +384,8 @@ class CameraPublisher(AutoSensorPublisher):
             data = self.sensor.stream_raw()
         else:
             data = self.sensor.poll_raw()
-        if "colour" in self._publishers and data["colour"]:
+        key = "colour"
+        if key in self._publishers and data[key]:
             self._publishers[key].publish(self._get_img_from_rgb(data[key], time, palette=False))
         for key in ["annotation", "instance"]:
             if key in self._publishers and data[key]:
@@ -502,11 +503,11 @@ class LidarPublisher(AutoSensorPublisher):
         self.sensor = cast(sensors.Lidar, self.sensor)
         data = self.sensor.poll()
         if isinstance(data["colours"], list):
-            data["colours"] = np.array(data["colours"]).reshape(-1, 3)
+            data["colours"] = np.array(data["colours"], dtype=np.uint8).reshape(-1, 3)
         points = cast(np.ndarray, data["pointCloud"])
         colours = cast(np.ndarray, data["colours"])
         colours = colours[:, [2, 1, 0]]  # RGB -> BGR
-        colours = np.hstack((colours, np.full((colours.shape[0], 1), 255))) # BGR -> BGRA
+        colours = np.hstack((colours, np.full((colours.shape[0], 1), 255, dtype=np.uint8))) # BGR -> BGRA
         lidar_data = np.column_stack(
             (points, colours.flatten().view("float32"))
         ).tobytes()
