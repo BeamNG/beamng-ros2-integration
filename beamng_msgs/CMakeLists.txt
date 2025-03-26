@@ -38,7 +38,6 @@ rosidl_generate_interfaces(${PROJECT_NAME}
   "msg/IdealRadarSensor.msg"
   "msg/IdealRadarSensorVehicle.msg"
   "msg/MeshSensor.msg"
-  "msg/MeshSensorBeam.msg"
   "msg/MeshSensorNode.msg"
   "msg/PowertrainSensor.msg"
   "msg/PowertrainSensorDevice.msg"
