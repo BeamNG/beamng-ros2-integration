@@ -1,3 +1,3 @@
 std_msgs/Header header
-MeshSensorBeam[] beams
+float64[] beam_stresses
 MeshSensorNode[] nodes
