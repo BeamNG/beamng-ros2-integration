@@ -673,7 +673,7 @@ class RadarPublisher(AutoSensorPublisher):
     def _return_to_msg(ret: List[float]) -> radar_msgs.RadarReturn:
         return radar_msgs.RadarReturn(
             range=float(ret[0]),
-            azimut=float(ret[2]),
+            azimuth=float(ret[2]),
             elevation=float(ret[3]),
             doppler_velocity=float(ret[1]),
             amplitude=float(ret[5]),
