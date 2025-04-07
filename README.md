@@ -1,7 +1,6 @@
 # BeamNG ROS2 Integration
 
-[![Documentation](https://img.shields.io/badge/Documentation-blue?logo=readthedocs&logoColor=white)](https://beamngpy.readthedocs.io/en/latest/_static/beamng_ros2)
-[![Messages](https://img.shields.io/badge/Messages-grey?logo=readthedocs&logoColor=white)](https://beamngpy.readthedocs.io/en/latest/_static/beamng_msgs/)
+[![Documentation](https://img.shields.io/badge/Documentation-blue?logo=readthedocs&logoColor=white)](https://documentation.beamng.com/api/ros2)
 [![Repository](https://img.shields.io/badge/Repository-grey?logo=github&logoColor=white)](https://github.com/BeamNG/beamng-ros2-integration)
 
 This integration is for ROS2, for ROS1 check [BeamNG ROS Integration](https://github.com/BeamNG/beamng-ros-integration).
@@ -111,7 +110,7 @@ To use this project, a basic knowledge of the BeamNG.tech simulator and the Beam
   ros2 param set /beamng_bridge host <BEAMNG_ADDRESS>
   ```
 
-5. To operate the node, you can use the exposed services, you can find their list in [https://beamngpy.readthedocs.io/en/latest/_static/beamng_msgs/interfaces/service_definitions.html](https://beamngpy.readthedocs.io/en/latest/_static/beamng_msgs/interfaces/service_definitions.html). Getting access to sensor data requires you to launch a scenario using the [StartScenario](https://beamngpy.readthedocs.io/en/latest/_static/beamng_msgs/interfaces/srv/StartScenario.html) service:
+5. To operate the node, you can use the exposed services, you can find their list in [Service Definitions](https://documentation.beamng.com/api/ros2/main/beamng_msgs/interfaces/service_definitions.html). Getting access to sensor data requires you to launch a scenario using the [StartScenario](https://documentation.beamng.com/api/ros2/main/beamng_msgs/interfaces/srv/StartScenario.html) service:
 
   ```bash
   ros2 service call /beamng_bridge/start_scenario beamng_msgs/srv/StartScenario "{path_to_scenario_definition: '/config/scenarios/example_tech_ground.json'}"

@@ -62,7 +62,7 @@ source_suffix = [".rst", ".md"]
 
 # -- Intersphinx options -----------------------------------------------------
 intersphinx_mapping = {
-    "beamngpy": ("https://beamngpy.readthedocs.io/en/latest/", None),
+    "beamngpy": ("https://documentation.beamng.com/api/beamngpy/", None),
     "rclpy": ("https://docs.ros.org/en/iron/p/rclpy/", None),
     "sensor_msgs": ("https://docs.ros.org/en/humble/p/sensor_msgs/", None),
     "std_msgs": ("https://docs.ros.org/en/humble/p/std_msgs/", None),
@@ -74,7 +74,7 @@ intersphinx_mapping = {
     "geometry_msgs": ("https://docs.ros.org/en/humble/p/geometry_msgs/", None),
     "python": ("https://docs.python.org/3", None),
     "beamng_msgs": (
-        "https://beamngpy.readthedocs.io/en/latest/_static/beamng_msgs/",
+        "https://documentation.beamng.com/api/ros2/main/beamng_msgs/",
         None,
     ),
     # "numpy": ("https://numpy.org/doc/stable/", None),
