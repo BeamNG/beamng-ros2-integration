@@ -315,9 +315,17 @@ class CameraPublisher(AutoSensorPublisher):
     def msg_type(self) -> Type:
         return sensor_msgs.Image
 
-    def _get_img_from_rgb(self, data: bytes, time: Time, palette: bool) -> sensor_msgs.Image:
+    def _get_img_from_rgb(
+        self, data: bytes, time: Time, palette: bool
+    ) -> sensor_msgs.Image:
         cam: sensors.Camera = self.sensor
-        decoded = cam._convert_to_image(data, cam.resolution[0], cam.resolution[1], palette=palette, force_ndarray=True)
+        decoded = cam._convert_to_image(
+            data,
+            cam.resolution[0],
+            cam.resolution[1],
+            palette=palette,
+            force_ndarray=True,
+        )
         return sensor_msgs.Image(
             header=self._make_header(time),
             height=cam.resolution[1],
@@ -386,10 +394,14 @@ class CameraPublisher(AutoSensorPublisher):
             data = self.sensor.poll_raw()
         key = "colour"
         if key in self._publishers and data[key]:
-            self._publishers[key].publish(self._get_img_from_rgb(data[key], time, palette=False))
+            self._publishers[key].publish(
+                self._get_img_from_rgb(data[key], time, palette=False)
+            )
         for key in ["annotation", "instance"]:
             if key in self._publishers and data[key]:
-                self._publishers[key].publish(self._get_img_from_rgb(data[key], time, palette=True))
+                self._publishers[key].publish(
+                    self._get_img_from_rgb(data[key], time, palette=True)
+                )
         if "depth" in self._publishers and data["depth"]:
             self._publishers["depth"].publish(
                 self._get_img_from_depth(data["depth"], time)
@@ -507,7 +519,9 @@ class LidarPublisher(AutoSensorPublisher):
         points = cast(np.ndarray, data["pointCloud"])
         colours = cast(np.ndarray, data["colours"])
         colours = colours[:, [2, 1, 0]]  # RGB -> BGR
-        colours = np.hstack((colours, np.full((colours.shape[0], 1), 255, dtype=np.uint8))) # BGR -> BGRA
+        colours = np.hstack(
+            (colours, np.full((colours.shape[0], 1), 255, dtype=np.uint8))
+        )  # BGR -> BGRA
         lidar_data = np.column_stack(
             (points, colours.flatten().view("float32"))
         ).tobytes()
@@ -558,17 +572,17 @@ class MeshPublisher(AutoSensorPublisher):
         return msgs.MeshSensor
 
     @staticmethod
-    def _beam_to_msg(beam: Dict[str, Any]) -> msgs.MeshSensorBeam:
-        return msgs.MeshSensorBeam(stress=beam["stress"])
-
-    @staticmethod
     def _node_to_msg(node: Dict[str, Any]) -> msgs.MeshSensorNode:
+        if len(node) >= len(sensors.Mesh.DATA_KEYS):
+            part_origin = node[sensors.Mesh.DATA_KEYS["partOrigin"]]
+        else:
+            part_origin = ""
         return msgs.MeshSensorNode(
-            part_origin=node.get("partOrigin", ""),
-            mass=node["mass"],
-            pos=xyz_to_point(**node["pos"]),
-            vel=xyz_to_vec3(**node["vel"]),
-            force=xyz_to_vec3(**node["force"]),
+            part_origin=part_origin,
+            mass=node[sensors.Mesh.DATA_KEYS["mass"]],
+            pos=xyz_to_point(**node[sensors.Mesh.DATA_KEYS["pos"]]),
+            vel=xyz_to_vec3(**node[sensors.Mesh.DATA_KEYS["vel"]]),
+            force=xyz_to_vec3(**node[sensors.Mesh.DATA_KEYS["force"]]),
         )
 
     def get_data(self, time: Time) -> msgs.MeshSensor:
@@ -577,10 +591,7 @@ class MeshPublisher(AutoSensorPublisher):
             return None
         msg = msgs.MeshSensor(
             header=self._make_header(time, self.vehicle.vid),
-            beams=[
-                self._beam_to_msg(data["beams"][float(i)])
-                for i in range(len(data["beams"]))
-            ],
+            beam_stresses=[data["beams"][float(i)] for i in range(len(data["beams"]))],
             nodes=[
                 self._node_to_msg(data["nodes"][float(i)])
                 for i in range(len(data["nodes"]))
@@ -662,7 +673,7 @@ class RadarPublisher(AutoSensorPublisher):
     def _return_to_msg(ret: List[float]) -> radar_msgs.RadarReturn:
         return radar_msgs.RadarReturn(
             range=float(ret[0]),
-            azimut=float(ret[2]),
+            azimuth=float(ret[2]),
             elevation=float(ret[3]),
             doppler_velocity=float(ret[1]),
             amplitude=float(ret[5]),
