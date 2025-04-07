@@ -167,3 +167,5 @@ docs_*
 # ros workspace directories
 /install
 /log
+
+/docs/production
