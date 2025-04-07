@@ -33,14 +33,14 @@ deploy-production:
     DOCUMENTATION_SSH_PRIVATE_KEY: "$SSH_PRIVATE_KEY"
     DOCUMENTATION_GIT_USERNAME: "$GITLAB_USER_NAME"
     DOCUMENTATION_GIT_EMAIL: "$GITLAB_USER_EMAIL"
-    DOCUMENTATION_ARTIFACTS_PATH: "docs/build"
+    DOCUMENTATION_ARTIFACTS_PATH: "docs_output"
     DOCUMENTATION_TARGET_PATH: "static/api/ros2"
   script:
     - bash docs/build.sh
     - bash docs/deploy_production.sh
   artifacts:
     paths:
-      - docs/build
+      - docs_output
   only:
     - dev
     #- main # TODO also USE_DEV_BRANCH=false
