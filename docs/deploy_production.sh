@@ -3,6 +3,10 @@
 # Will host built documentation on https://documentation.beamng.com/api/ros2
 set -eo pipefail
 
+# Dependencies
+apt update
+apt install ssh -y  # for ssh-keyscan
+
 # Set up SSH
 mkdir -p ~/.ssh
 chmod 700 ~/.ssh
