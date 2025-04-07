@@ -34,7 +34,7 @@ deploy-production:
     DOCUMENTATION_GIT_USERNAME: "$GITLAB_USER_NAME"
     DOCUMENTATION_GIT_EMAIL: "$GITLAB_USER_EMAIL"
     DOCUMENTATION_ARTIFACTS_PATH: "docs/build"
-    DOCUMENTATION_TARGET_PATH: "static/api/ros1"
+    DOCUMENTATION_TARGET_PATH: "static/api/ros2"
   script:
     - bash docs/build.sh
     - bash docs/deploy_production.sh
@@ -43,4 +43,4 @@ deploy-production:
       - docs/build
   only:
     - dev
-    - main # TODO also USE_DEV_BRANCH=false
+    #- main # TODO also USE_DEV_BRANCH=false
