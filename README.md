@@ -1,6 +1,6 @@
 # BeamNG ROS2 Integration
 
-[![Documentation](https://img.shields.io/badge/Documentation-blue?logo=readthedocs&logoColor=white)](https://documentation.beamng.com/api/ros2)
+[![Documentation](https://img.shields.io/badge/Documentation-blue?logo=googledocs&logoColor=white)](https://documentation.beamng.com/api/ros2)
 [![Repository](https://img.shields.io/badge/Repository-grey?logo=github&logoColor=white)](https://github.com/BeamNG/beamng-ros2-integration)
 
 This integration is for ROS2, for ROS1 check [BeamNG ROS Integration](https://github.com/BeamNG/beamng-ros-integration).
