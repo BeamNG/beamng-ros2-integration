@@ -125,6 +125,7 @@ Running the BeamNG ROS2 integration requires three individual software component
 
 | BeamNG.tech | BeamNGpy | BeamNG ROS2 Integration |
 |-------------|----------|-------------------------|
+| 0.35        | 1.32     |  1.3.0                  |
 | 0.34        | 1.31     |  1.2.0                  |
 | 0.33        | 1.30     |  1.1.0                  |
 | 0.32        | 1.29     |  1.0.0                  |
