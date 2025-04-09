@@ -1,5 +1,10 @@
 # BeamNG ROS2 Integration
 
+[![Documentation](https://img.shields.io/badge/Documentation-blue?logo=googledocs&logoColor=white)](https://documentation.beamng.com/api/ros2)
+[![Repository](https://img.shields.io/badge/Repository-grey?logo=github&logoColor=white)](https://github.com/BeamNG/beamng-ros2-integration)
+
+This integration is for ROS2, for ROS1 check [BeamNG ROS Integration](https://github.com/BeamNG/beamng-ros-integration).
+
 ## About
 
 This repository contains packages to support the interoperability between [BeamNG.tech](https://beamng.tech/) and [ROS2](https://www.ros.org/).
@@ -9,27 +14,16 @@ For inquiries regarding commercial use, contact us at <licensing@beamng.gmbh>.
 
 ## Table of Contents
 
-- [BeamNG ROS2 Integration](#beamng-ros2-integration)
-  - [About](#about)
-  - [Table of Contents](#table-of-contents)
-  - [Documentation](#documentation)
-  - [Features](#features)
-  - [Prerequisites](#prerequisites)
-    - [Steps](#steps)
-    - [Optional Dependencies](#optional-dependencies)
-  - [Getting Started](#getting-started)
-    - [Steps](#steps-1)
-  - [Compatibility](#compatibility)
-  - [Troubleshooting](#troubleshooting)
-    - [Known Issues](#known-issues)
-  - [Contributions](#contributions)
-
-<a name="docs"></a>
-
-## Documentation
-The documentation is generated using `rosdoc2` and can be found at [https://beamngpy.readthedocs.io/en/latest/_static/beamng_ros2](https://beamngpy.readthedocs.io/en/latest/_static/beamng_ros2).
-
-The [list of ROS2 messages, services and actions](https://beamngpy.readthedocs.io/en/latest/_static/beamng_msgs/) is also available online.
+- [Features](#features)
+- [Prerequisites](#prereqs)
+  - [Steps](#steps)
+  - [Optional Dependencies](#optional-dependencies)
+- [Getting Started](#getstart)
+  - [Steps](#steps)
+- [Compatibility](#compatibility)
+- [Troubleshooting](#troubleshooting)
+  - [Known Issues](#known-issues)
+- [Contributions](#contributions)
 
 ## Features
 
@@ -45,10 +39,15 @@ For sensor shared memory support, BeamNG.tech and ROS have to be running on the 
 
 The BeamNG ROS2 integration is tested with the following ROS2 distributions: [Foxy Fitzroy](https://docs.ros.org/en/foxy) and [Humble Hawksbill](https://docs.ros.org/en/humble/index.html).
 
+<a name="steps"></a>
+
 ### Steps
-1. Setup your ROS2 Humble/Foxy workspace.
+1. Setup your ROS2 Humble/Foxy workspace. See
+   * [Install ROS Humble](https://docs.ros.org/en/humble/Installation/Ubuntu-Install-Debs.html)
+   * [Setup ROS workspace](https://docs.ros.org/en/humble/Tutorials/Beginner-Client-Libraries/Colcon-Tutorial.html)
 2. Clone this repository into your ROS2 workspace.
-3. Use [rosdep](https://docs.ros.org/en/humble/Tutorials/Intermediate/Rosdep.html#rosdep-operation) to install the dependencies for the package.
+3. Use [rosdep](https://docs.ros.org/en/humble/Tutorials/Intermediate/Rosdep.html#rosdep-operation) to install the dependencies for the package. See:
+   * [How do I use the rosdep tool](https://docs.ros.org/en/humble/Tutorials/Intermediate/Rosdep.html#how-do-i-use-the-rosdep-tool)
 4. Install `beamngpy` using pip or conda in the Python environment you use to run the ROS2 nodes.
 5. To run the bridge, run `ros2 run beamng_ros2 beamng_bridge`.
 
@@ -111,7 +110,7 @@ To use this project, a basic knowledge of the BeamNG.tech simulator and the Beam
   ros2 param set /beamng_bridge host <BEAMNG_ADDRESS>
   ```
 
-5. To operate the node, you can use the exposed services, you can find their list in [https://beamngpy.readthedocs.io/en/latest/_static/beamng_msgs/interfaces/service_definitions.html](https://beamngpy.readthedocs.io/en/latest/_static/beamng_msgs/interfaces/service_definitions.html). Getting access to sensor data requires you to launch a scenario using the [StartScenario](https://beamngpy.readthedocs.io/en/latest/_static/beamng_msgs/interfaces/srv/StartScenario.html) service:
+5. To operate the node, you can use the exposed services, you can find their list in [Service Definitions](https://documentation.beamng.com/api/ros2/main/beamng_msgs/interfaces/service_definitions.html). Getting access to sensor data requires you to launch a scenario using the [StartScenario](https://documentation.beamng.com/api/ros2/main/beamng_msgs/interfaces/srv/StartScenario.html) service:
 
   ```bash
   ros2 service call /beamng_bridge/start_scenario beamng_msgs/srv/StartScenario "{path_to_scenario_definition: '/config/scenarios/example_tech_ground.json'}"
@@ -126,6 +125,7 @@ Running the BeamNG ROS2 integration requires three individual software component
 
 | BeamNG.tech | BeamNGpy | BeamNG ROS2 Integration |
 |-------------|----------|-------------------------|
+| 0.35        | 1.32     |  1.3.0                  |
 | 0.34        | 1.31     |  1.2.0                  |
 | 0.33        | 1.30     |  1.1.0                  |
 | 0.32        | 1.29     |  1.0.0                  |

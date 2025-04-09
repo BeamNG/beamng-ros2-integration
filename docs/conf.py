@@ -12,7 +12,24 @@
 #
 import os
 import sys
-import beamngpy  # needed for running sphinx-build because a later automatic import fails due to strange environment issue
+from pathlib import Path
+
+
+# -- Run pre-build steps -----------------------------------------------------
+sys.path.append(str(Path(".").resolve()))
+
+from pre_build import pre_build, cleanup
+
+def setup(app):
+    root_dir = str(Path(f"{app.srcdir}/..").resolve())
+    pre_build(root_dir, app.srcdir, app.outdir)
+
+    def build_finished(app, exception):
+        if not exception:
+            cleanup(root_dir, app.srcdir, app.outdir)
+
+    app.connect('build-finished', build_finished)
+
 
 # -- Project information -----------------------------------------------------
 
@@ -31,6 +48,8 @@ extensions = [
     "sphinx.ext.autodoc",
     "sphinx.ext.intersphinx",
     "sphinx.ext.extlinks",
+    "myst_parser",
+    "sphinx_multiversion",
 ]
 
 # Add any paths that contain templates here, relative to this directory.
@@ -58,7 +77,10 @@ html_static_path = ["_static"]
 
 
 # source_suffix = '.rst'
-source_suffix = [".rst", ".md"]
+source_suffix = {
+    '.rst': 'restructuredtext',
+    '.md': 'markdown',
+}
 
 # -- Intersphinx options -----------------------------------------------------
 intersphinx_mapping = {
@@ -101,3 +123,7 @@ extlinks = {
         "%s",
     )
 }
+
+# -- Multi-version config ----------------------------------------------------
+smv_tag_whitelist = r'^v.*$'
+smv_branch_whitelist = r'^(main|dev)$'

@@ -56,7 +56,7 @@ class NetworkPublisher(BeamNGPublisher):
                 Marker(
                     header=self._make_header(time, "map"),
                     ns=f"{type}_{self.name}",
-                    id=r_id,
+                    id=m_id,
                     type=Marker.LINE_STRIP,
                     action=Marker.ADD,
                     pose=Pose(
@@ -66,9 +66,9 @@ class NetworkPublisher(BeamNGPublisher):
                     scale=xyz_to_vec3(1.0, 0.5, 0.0),
                     color=color,
                     lifetime=Duration(seconds=10).to_msg(),
-                    points=[xyz_to_point(*r_point[type]) for r_point in road],
+                    points=[xyz_to_point(*r_point[type]) for r_point in road["edges"]],
                 )
-                for r_id, road in network_def.items()
+                for (m_id, (r_id, road)) in enumerate(network_def.items())
             ]
         )
 
@@ -83,15 +83,10 @@ class NetworkPublisher(BeamNGPublisher):
         """
 
         beamng.control.pause()
-        roads = beamng.scenario.get_roads()
+        network_def = beamng.scenario.get_road_network()
 
         # Check if roads is a dictionary and not empty
-        if isinstance(roads, dict) and roads:
-            network_def = dict()
-            for r_id, r_inf in roads.items():
-                if r_inf["drivability"] != "-1":
-                    network_def[int(r_id)] = beamng.scenario.get_road_edges(r_id)
-
+        if isinstance(network_def, dict) and network_def:
             self._road_network_left = self._create_road_network(
                 "left", ColorRGBA(r=0.7, g=0.7, b=0.7, a=0.8), time, network_def
             )
