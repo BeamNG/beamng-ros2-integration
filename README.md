@@ -65,24 +65,9 @@ If available, BeamNG-ROS2 will use the `python-rapidjson` library to support JSO
 To use this project, a basic knowledge of the BeamNG.tech simulator and the BeamNGpy is neccessary. We recommend to familiarize yourself first with [BeamNGpy][1] to get a basic understanding of the platform before using the BeamNG ROS2 Integration.
 
 ### Steps
-1. After setting up BeamNG.tech and BeamNGpy with a Python environment, the simulation needs to be listening on the BeamNGpy socket. To do that, you can run the executable with the following arguments:
+1. After setting up BeamNG.tech and BeamNGpy with a Python environment, the simulation needs to be listening on the BeamNGpy socket. To do that, you can follow the "Connect to BeamNGpy" [documentation](https://documentation.beamng.com/beamng_tech/arguments_and_settings/#connect-to-beamngpy).
 
-  Command prompt (`cmd.exe`):
-  ```bat
-  Bin64\BeamNG.tech.x64.exe -console -nosteam -tcom-listen-ip <LISTEN_IP> -lua extensions.tech_techCore.openServer(25252)
-  ```
-
-  PowerShell:
-  ```posh
-  Bin64\BeamNG.tech.x64.exe -console -nosteam -tcom-listen-ip <LISTEN_IP> -lua "extensions.tech_techCore.openServer(25252)"
-  ```
-
-  Linux Terminal:
-  ```bash
-  BinLinux/BeamNG.tech.x64 -nosteam -tcom-listen-ip <LISTEN_IP> -lua "extensions.tech_techCore.openServer(25252)"
-  ```
-
-  `<LISTEN_IP>` will be `127.0.0.1` in the case of running BeamNG.tech on the same machine and operating system as the ROS2 interface. If you are running ROS2 using WSL or want to connect to a remote machine, you need to set the listen IP to the one of the corresponding network interface.
+The `-tcom-listen-ip` should be `127.0.0.1` in the case of running BeamNG.tech on the same machine and operating system as the ROS2 interface. If you are running ROS2 using WSL or want to connect to a remote machine, you need to set the listen IP to the one of the corresponding network interface.
 
 2. The ROS2 packages from this repository need to be added and built in your colcon workspace. See the [ROS2 tutorials](https://docs.ros.org/en/humble/Tutorials.html) for more information on how to set up a colcon workspace.
    If you use ROS2 on Windows (without WSL), the `rosdep` command does not work, you will have to skip installing dependencies or install them manually. The integration should still work on that configuration.
