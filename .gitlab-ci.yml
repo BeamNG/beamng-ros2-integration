@@ -43,3 +43,4 @@ deploy-production:
       - docs_output
   only:
     - main
+    - ci-fix
