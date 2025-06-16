@@ -259,8 +259,8 @@ class BeamNGBridge(Node):
             vehicle_extra_data[idx].pop("on_scenario_start")
             self._spawn_vehicle_node(vehicle, vehicle_extra_data[idx])
 
-        self.executor_thread.start()
         self.publisher_callback_beamng()
+        self.executor_thread.start()
         self.logger.info(f'Started scenario "{scenario.name}".')
         self.running = True
 
