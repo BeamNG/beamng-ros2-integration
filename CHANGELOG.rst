@@ -1,6 +1,10 @@
 Changelog
 =========
 
+Version 1.4.0
+-------------
+- Fixed sensors occasionally not returning data after the first publish.
+
 Version 1.3.0
 -------------
 - Fixed various sensor publisher issues.
