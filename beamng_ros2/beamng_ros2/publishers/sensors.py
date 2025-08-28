@@ -338,18 +338,18 @@ class CameraPublisher(AutoSensorPublisher):
 
     def _get_img_from_depth(self, data: bytes, time: Time) -> sensor_msgs.Image:
         cam: sensors.Camera = self.sensor
-        if cam.integer_depth:
+        sim_data_processed = not cam.is_using_shared_memory
+        if cam.integer_depth and sim_data_processed:
             depth = np.frombuffer(data, dtype=np.uint8)
         else:
             depth = np.frombuffer(data, dtype=np.float32)
-        if cam.postprocess_depth:
-            depth = cam.depth_buffer_processing(depth)
-        elif not cam.integer_depth:
-            depth = np.clip(depth * 255.0, 0.0, 255.0)
+            if cam.postprocess_depth:
+                depth = cam.depth_buffer_processing(depth)
+            else:
+                depth = np.clip(255.0 * depth, 0.0, 255.0).astype(np.uint8)
         if cam.is_depth_inverted:
             depth = 255 - depth
         depth = np.array(depth, dtype=np.uint8)
-
         return sensor_msgs.Image(
             header=self._make_header(time),
             height=cam.resolution[1],
@@ -400,7 +400,9 @@ class CameraPublisher(AutoSensorPublisher):
         for key in ["annotation", "instance"]:
             if key in self._publishers and data[key]:
                 self._publishers[key].publish(
-                    self._get_img_from_rgb(data[key], time, palette=True)
+                    self._get_img_from_rgb(
+                        data[key], time, palette=not self.sensor.is_using_shared_memory
+                    )
                 )
         if "depth" in self._publishers and data["depth"]:
             self._publishers["depth"].publish(
