@@ -20,6 +20,7 @@ setup(
     entry_points={
         "console_scripts": [
             "teleop = beamng_teleop_keyboard.teleop:main",
+            "drone_teleop = beamng_teleop_keyboard.drone_teleop:main",
         ],
     },
 )

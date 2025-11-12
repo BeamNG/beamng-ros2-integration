@@ -90,7 +90,25 @@ class BeamNGBridge(Node):
             host = self.get_parameter("host").get_parameter_value().string_value
             port = self.get_parameter("port").get_parameter_value().integer_value
             launch = self.get_parameter("launch").get_parameter_value().bool_value
-            self._beamng = BeamNGpy(host, port).open(listen_ip=host, launch=launch)
+            try:
+                self._beamng = BeamNGpy(host, port).open(listen_ip=host, launch=launch)
+            except OSError as e:
+                # Provide more specific error messages for common connection issues
+                if "No route to host" in str(e) or e.errno == 113:
+                    self.logger.error(
+                        f"Network error: Cannot reach BeamNG.tech at {host}:{port}. "
+                        f"Check if:\n"
+                        f"  1. BeamNG.tech is running on the target machine\n"
+                        f"  2. The IP address {host} is correct\n"
+                        f"  3. Firewall allows connections on port {port}\n"
+                        f"  4. You're on the same network (if using remote IP)"
+                    )
+                elif "Connection refused" in str(e) or e.errno == 111:
+                    self.logger.error(
+                        f"Connection refused at {host}:{port}. "
+                        f"BeamNG.tech may not be running or not listening on this port."
+                    )
+                raise
         return self._beamng
 
     def _cancel_timers(self):
@@ -214,9 +232,17 @@ class BeamNGBridge(Node):
         response.success = False
         try:
             beamng = self.beamng()
+        except OSError:
+            # OSError already logged with detailed message in beamng() method
+            return response
         except Exception as e:
+            # Log other exceptions that weren't handled in beamng()
+            host = self.get_parameter("host").get_parameter_value().string_value
+            port = self.get_parameter("port").get_parameter_value().integer_value
             self.logger.error(
-                f"Cannot start/connect to BeamNG. Check the `host` and `port` parameters of this node. Original error: {e}"
+                f"Cannot start/connect to BeamNG at {host}:{port}. "
+                f"Make sure BeamNG.tech is running and accessible. "
+                f"Original error: {e}"
             )
             return response
 

@@ -6,12 +6,10 @@ from rclpy.node import Node
 from geometry_msgs.msg import Twist
 from std_msgs.msg import String
 import beamngpy as bngpy
-from beamng_msgs.msg import VehicleControl
+from beamng_msgs.msg import VehicleControl, DroneControl
 from beamng_msgs.srv import VehicleCommand, SetControlMode
 from pathlib import Path
-from distutils.version import LooseVersion
 
-MIN_BNG_VERSION_REQUIRED = "0.31.0"
 NODE_NAME = "beamng_agent"
 
 
@@ -24,6 +22,7 @@ class VehicleControlNode(Node):
         port = self.declare_parameter("port", 25252).value
         self.driving_mode = self.declare_parameter("driving_mode", "keyboard").value
         vehicle_id = self.declare_parameter("vehicle_id", "ego").value
+        self.vehicle_type = self.declare_parameter("vehicle_type", "vehicle").value  # "vehicle" or "drone"
 
         if not vehicle_id:
             self.get_logger().fatal("No Vehicle ID given, shutting down node.")
@@ -58,14 +57,23 @@ class VehicleControlNode(Node):
             )
             sys.exit(1)
 
-        self.subscription = self.create_subscription(
-            VehicleControl,
-            "/control",
-            lambda msg: self.send_control_signal(msg, self.driving_mode),
-            10,
-        )
-
-        self.twist_to_bng = TwistToBNG(self)
+        # Subscribe based on vehicle type
+        if self.vehicle_type == "drone":
+            self.drone_subscription = self.create_subscription(
+                DroneControl,
+                "/drone_control",
+                self.drone_control_callback,
+                10,
+            )
+            self.get_logger().info("Agent node configured for drone control")
+        else:
+            self.subscription = self.create_subscription(
+                VehicleControl,
+                "/control",
+                lambda msg: self.send_control_signal(msg, self.driving_mode),
+                10,
+            )
+            self.twist_to_bng = TwistToBNG(self)
 
         self.srv = self.create_service(
             VehicleCommand, "vehicle_command", self.vehicle_command_callback
@@ -104,15 +112,34 @@ class VehicleControlNode(Node):
             response.success = False
             return response
 
-        if mode not in ["ai", "keyboard"]:
-            self.get_logger().error(f"Invalid control mode: {mode}")
-            response.success = False
-            return response
+        if self.vehicle_type == "drone":
+            # Drone doesn't support AI mode, only manual control
+            if mode not in ["keyboard"]:
+                self.get_logger().error(f"Invalid control mode for drone: {mode}. Only 'keyboard' is supported.")
+                response.success = False
+                return response
+        else:
+            if mode not in ["ai", "keyboard"]:
+                self.get_logger().error(f"Invalid control mode: {mode}")
+                response.success = False
+                return response
 
         self.driving_mode = mode
         self.get_logger().info(f"Control mode set to: {mode} for vehicle: {vehicle_id}")
         response.success = True
         return response
+
+    def drone_control_callback(self, msg: DroneControl):
+        """Callback for drone control messages when agent is in drone mode."""
+        # The drone_controller node handles the actual control,
+        # but this allows the agent node to work with drones too
+        # For now, just log that we received the message
+        # In the future, this could forward to drone_controller or handle directly
+        self.get_logger().debug(
+            f"Received drone control: ascend={msg.ascend:.2f}, "
+            f"descend={msg.descend:.2f}, pitch={msg.pitch:.2f}, "
+            f"roll={msg.roll:.2f}, yaw={msg.yaw:.2f}"
+        )
 
     def send_control_signal(self, signal, mode):
         if mode == "ai":
