@@ -20,6 +20,10 @@ For inquiries regarding commercial use, contact us at <licensing@beamng.gmbh>.
   - [Optional Dependencies](#optional-dependencies)
 - [Getting Started](#getstart)
   - [Steps](#steps)
+- [Drone Control](#drone-control)
+  - [Quick Start](#quick-start)
+  - [Control Commands](#control-commands)
+  - [Complete Documentation](#complete-documentation)
 - [Compatibility](#compatibility)
 - [Troubleshooting](#troubleshooting)
   - [Known Issues](#known-issues)
@@ -104,13 +108,100 @@ The `-tcom-listen-ip` should be `127.0.0.1` in the case of running BeamNG.tech o
 Using it will start up a node that connects to the simulation and starts up a scenario as defined in the `beamng_ros2/config/scenarios/example_tech_ground.json`.
 Other scenario specifications are available in the same directory.
 
+<a name="drone-control"></a>
+
+## Drone Control
+
+The BeamNG ROS2 integration includes support for controlling the BeamNG.tech drone vehicle via ROS2.
+
+<a name="quick-start"></a>
+
+### Quick Start
+
+To control the drone, you need to start 4 components in separate terminals:
+
+**Terminal 1: BeamNG Bridge**
+```bash
+cd ~/ros2_ws
+source install/setup.bash
+ros2 run beamng_ros2 beamng_bridge --ros-args -p host:=192.168.1.133 -p port:=25252
+```
+
+**Terminal 2: Load Drone Scenario**
+```bash
+cd ~/ros2_ws
+source install/setup.bash
+ros2 service call /beamng_bridge/start_scenario beamng_msgs/srv/StartScenario \
+    "{path_to_scenario_definition: '/config/scenarios/drone_scenario.json'}"
+```
+
+**Terminal 3: Start Drone Controller**
+```bash
+cd ~/ros2_ws
+source install/setup.bash
+ros2 launch beamng_bringup beamng_drone_controller.launch.py \
+    host:=192.168.1.133 port:=25252 vehicle_id:=drone
+```
+
+**Terminal 4: Start Drone Teleop (Interactive)**
+```bash
+cd ~/ros2_ws
+source install/setup.bash
+ros2 run beamng_teleop_keyboard drone_teleop
+```
+
+**Important:** The teleop node requires an interactive terminal and must be run directly (not via launch file).
+
+<a name="control-commands"></a>
+
+### Control Commands
+
+Once the teleop is running, use these keyboard controls:
+
+| Key | Action |
+|-----|--------|
+| `w` | Ascend |
+| `x` | Descend |
+| `a` | Roll left |
+| `d` | Roll right |
+| `q` | Yaw left |
+| `e` | Yaw right |
+| `i` | Pitch forward |
+| `k` | Pitch backward |
+| `t` | **Toggle takeoff/land** ⚠️ (Press this first!) |
+| `m` | Toggle flight mode |
+| `space`/`s` | Hover (stop all movement) |
+| `CTRL-C` | Quit |
+
+**Control Flow:**
+1. Start all 4 terminals as described above
+2. **Press `t`** to toggle takeoff (required before drone can move)
+3. Use movement keys (`w`, `a`, `d`, `q`, `e`, `i`, `k`) to control the drone
+4. Press `space` or `s` to hover/stop
+5. Press `t` again to land
+
+<a name="complete-documentation"></a>
+
+### Complete Documentation
+
+For detailed documentation including:
+- System architecture
+- Step-by-step setup instructions
+- Troubleshooting guide
+- Verification commands
+- Advanced usage
+
+See: [`beamng_agent/DRONE_CONTROL_GUIDE.md`](../DRONE_CONTROL_GUIDE.md)
+
 ## Compatibility
 
 Running the BeamNG ROS2 integration requires three individual software components, here is a list of compatible versions.
 
 | BeamNG.tech | BeamNGpy | BeamNG ROS2 Integration |
 |-------------|----------|-------------------------|
-| 0.36        | 1.33     |  1.4.0                  |
+| 0.38        | 1.35     |  1.5.0                  |
+| 0.37        | 1.34.1   |  1.4.0                  |
+| 0.36        | 1.33.1   |  1.4.0                  |
 | 0.35        | 1.32     |  1.3.0                  |
 | 0.34        | 1.31     |  1.2.0                  |
 | 0.33        | 1.30     |  1.1.0                  |
