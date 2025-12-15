@@ -1,13 +1,13 @@
-# BeamNG ROS2 Integration
+# BeamNG ROS 2 Integration
 
 [![Documentation](https://img.shields.io/badge/Documentation-blue?logo=googledocs&logoColor=white)](https://documentation.beamng.com/api/ros2)
 [![Repository](https://img.shields.io/badge/Repository-grey?logo=github&logoColor=white)](https://github.com/BeamNG/beamng-ros2-integration)
 
-This integration is for ROS2, for ROS1 check [BeamNG ROS Integration](https://github.com/BeamNG/beamng-ros-integration).
+This integration is for ROS 2, for ROS 1 check [BeamNG ROS Integration](https://github.com/BeamNG/beamng-ros-integration).
 
 ## About
 
-This repository contains packages to support the interoperability between [BeamNG.tech](https://beamng.tech/) and [ROS2](https://www.ros.org/).
+This repository contains packages to support the interoperability between [BeamNG.tech](https://beamng.tech/) and [ROS 2](https://www.ros.org/).
 BeamNG.tech is a driving simulation platform, suitable for commercial and academic use.
 Inquiries for academic use can be made through our [registration form](https://register.beamng.tech/).
 For inquiries regarding commercial use, contact us at <licensing@beamng.gmbh>.
@@ -20,10 +20,6 @@ For inquiries regarding commercial use, contact us at <licensing@beamng.gmbh>.
   - [Optional Dependencies](#optional-dependencies)
 - [Getting Started](#getstart)
   - [Steps](#steps)
-- [Drone Control](#drone-control)
-  - [Quick Start](#quick-start)
-  - [Control Commands](#control-commands)
-  - [Complete Documentation](#complete-documentation)
 - [Compatibility](#compatibility)
 - [Troubleshooting](#troubleshooting)
   - [Known Issues](#known-issues)
@@ -37,22 +33,22 @@ The BeamNG ROS2 integration includes support for the **remote** control of the s
 
 ## Prerequisites
 
-For using the BeamNG ROS2 integration, a BeamNG.tech build and a Python environment with [BeamNGpy][1] installed are required. BeamNGpy has to have compatible version with the BeamNG.tech installation.
+For using the BeamNG ROS 2 integration, a BeamNG.tech build and a Python environment with [BeamNGpy][1] installed are required. BeamNGpy has to have a compatible version with the BeamNG.tech installation.
 
 For sensor shared memory support, BeamNG.tech and ROS have to be running on the **same machine** and the **same operating system** (Windows Subsystem for Linux will not work with shared memory). Shared memory on Linux is **not working** in the current BeamNG.tech release and the support will come in the next major update.
 
-The BeamNG ROS2 integration is tested with the following ROS2 distributions: [Foxy Fitzroy](https://docs.ros.org/en/foxy) and [Humble Hawksbill](https://docs.ros.org/en/humble/index.html).
+The BeamNG ROS 2 integration is tested with the following ROS 2 distributions: [Foxy Fitzroy](https://docs.ros.org/en/foxy) and [Humble Hawksbill](https://docs.ros.org/en/humble/index.html).
 
 <a name="steps"></a>
 
-### Steps
-1. Setup your ROS2 Humble/Foxy workspace. See
+### Setup Steps
+1. Setup your ROS 2 Humble/Foxy workspace. See
    * [Install ROS Humble](https://docs.ros.org/en/humble/Installation/Ubuntu-Install-Debs.html)
    * [Setup ROS workspace](https://docs.ros.org/en/humble/Tutorials/Beginner-Client-Libraries/Colcon-Tutorial.html)
-2. Clone this repository into your ROS2 workspace.
+2. Clone this repository into your ROS 2 workspace.
 3. Use [rosdep](https://docs.ros.org/en/humble/Tutorials/Intermediate/Rosdep.html#rosdep-operation) to install the dependencies for the package. See:
    * [How do I use the rosdep tool](https://docs.ros.org/en/humble/Tutorials/Intermediate/Rosdep.html#how-do-i-use-the-rosdep-tool)
-4. Install `beamngpy` using pip or conda in the Python environment you use to run the ROS2 nodes.
+4. Install `beamngpy` using pip or conda in the Python environment you use to run the ROS 2 nodes.
 5. To run the bridge, run `ros2 run beamng_ros2 beamng_bridge`.
 
 ### Optional Dependencies
@@ -66,15 +62,17 @@ If available, BeamNG-ROS2 will use the `python-rapidjson` library to support JSO
 
 ## Getting Started
 
-To use this project, a basic knowledge of the BeamNG.tech simulator and the BeamNGpy is neccessary. We recommend to familiarize yourself first with [BeamNGpy][1] to get a basic understanding of the platform before using the BeamNG ROS2 Integration.
+To use this project, a basic knowledge of the BeamNG.tech simulator and the BeamNGpy is necessary. We recommend to familiarize yourself first with [BeamNGpy][1] to get a basic understanding of the platform before using the BeamNG ROS 2 Integration.
+
+For detailed setup and teleoperation examples (ground vehicles and drone), see the online documentation linked at the top of this README.
 
 ### Steps
 1. After setting up BeamNG.tech and BeamNGpy with a Python environment, the simulation needs to be listening on the BeamNGpy socket. To do that, you can follow the "Connect to BeamNGpy" [documentation](https://documentation.beamng.com/beamng_tech/arguments_and_settings/#connect-to-beamngpy).
 
 The `-tcom-listen-ip` should be `127.0.0.1` in the case of running BeamNG.tech on the same machine and operating system as the ROS2 interface. If you are running ROS2 using WSL or want to connect to a remote machine, you need to set the listen IP to the one of the corresponding network interface.
 
-2. The ROS2 packages from this repository need to be added and built in your colcon workspace. See the [ROS2 tutorials](https://docs.ros.org/en/humble/Tutorials.html) for more information on how to set up a colcon workspace.
-   If you use ROS2 on Windows (without WSL), the `rosdep` command does not work, you will have to skip installing dependencies or install them manually. The integration should still work on that configuration.
+2. The ROS 2 packages from this repository need to be added and built in your colcon workspace. See the [ROS 2 tutorials](https://docs.ros.org/en/humble/Tutorials.html) for more information on how to set up a colcon workspace.
+   If you use ROS 2 on Windows (without WSL), the `rosdep` command does not work, you will have to skip installing dependencies or install them manually. The integration should still work on that configuration.
 
   ```bash
   source /opt/ros/humble/setup.bash
@@ -85,7 +83,7 @@ The `-tcom-listen-ip` should be `127.0.0.1` in the case of running BeamNG.tech o
   colcon build # or colcon build --symlink-install
   ```
 
-1. A node connecting ROS2 to the simulation can be started using the `ros2 run` command:
+1. A node connecting ROS 2 to the simulation can be started using the `ros2 run` command:
 
   ```bash
   ros2 run beamng_ros2 beamng_bridge
@@ -108,94 +106,11 @@ The `-tcom-listen-ip` should be `127.0.0.1` in the case of running BeamNG.tech o
 Using it will start up a node that connects to the simulation and starts up a scenario as defined in the `beamng_ros2/config/scenarios/example_tech_ground.json`.
 Other scenario specifications are available in the same directory.
 
-<a name="drone-control"></a>
 
-## Drone Control
-
-The BeamNG ROS2 integration includes support for controlling the BeamNG.tech drone vehicle via ROS2.
-
-<a name="quick-start"></a>
-
-### Quick Start
-
-To control the drone, you need to start 4 components in separate terminals:
-
-**Terminal 1: BeamNG Bridge**
-```bash
-cd ~/ros2_ws
-source install/setup.bash
-ros2 run beamng_ros2 beamng_bridge --ros-args -p host:=192.168.1.133 -p port:=25252
-```
-
-**Terminal 2: Load Drone Scenario**
-```bash
-cd ~/ros2_ws
-source install/setup.bash
-ros2 service call /beamng_bridge/start_scenario beamng_msgs/srv/StartScenario \
-    "{path_to_scenario_definition: '/config/scenarios/drone_scenario.json'}"
-```
-
-**Terminal 3: Start Drone Controller**
-```bash
-cd ~/ros2_ws
-source install/setup.bash
-ros2 launch beamng_bringup beamng_drone_controller.launch.py \
-    host:=192.168.1.133 port:=25252 vehicle_id:=drone
-```
-
-**Terminal 4: Start Drone Teleop (Interactive)**
-```bash
-cd ~/ros2_ws
-source install/setup.bash
-ros2 run beamng_teleop_keyboard drone_teleop
-```
-
-**Important:** The teleop node requires an interactive terminal and must be run directly (not via launch file).
-
-<a name="control-commands"></a>
-
-### Control Commands
-
-Once the teleop is running, use these keyboard controls:
-
-| Key | Action |
-|-----|--------|
-| `w` | Ascend |
-| `x` | Descend |
-| `a` | Roll left |
-| `d` | Roll right |
-| `q` | Yaw left |
-| `e` | Yaw right |
-| `i` | Pitch forward |
-| `k` | Pitch backward |
-| `t` | **Toggle takeoff/land** ⚠️ (Press this first!) |
-| `m` | Toggle flight mode |
-| `space`/`s` | Hover (stop all movement) |
-| `CTRL-C` | Quit |
-
-**Control Flow:**
-1. Start all 4 terminals as described above
-2. **Press `t`** to toggle takeoff (required before drone can move)
-3. Use movement keys (`w`, `a`, `d`, `q`, `e`, `i`, `k`) to control the drone
-4. Press `space` or `s` to hover/stop
-5. Press `t` again to land
-
-<a name="complete-documentation"></a>
-
-### Complete Documentation
-
-For detailed documentation including:
-- System architecture
-- Step-by-step setup instructions
-- Troubleshooting guide
-- Verification commands
-- Advanced usage
-
-See: [`beamng_agent/DRONE_CONTROL_GUIDE.md`](../DRONE_CONTROL_GUIDE.md)
 
 ## Compatibility
 
-Running the BeamNG ROS2 integration requires three individual software components, here is a list of compatible versions.
+Running the BeamNG ROS 2 integration requires three individual software components. The following table lists compatible versions:
 
 | BeamNG.tech | BeamNGpy | BeamNG ROS2 Integration |
 |-------------|----------|-------------------------|
@@ -209,7 +124,7 @@ Running the BeamNG ROS2 integration requires three individual software component
 
 ## Troubleshooting
 
-This section lists common issues with  BeamNG ROS2 Integration in particular. Since this
+This section lists common issues with BeamNG ROS 2 Integration in particular. Since this
 library is closely tied to BeamNG.tech and thus BeamNG.drive, it is also
 recommended to consult the documentation on BeamNG.drive here:
 
