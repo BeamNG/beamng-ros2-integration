@@ -7,7 +7,7 @@ General setup
 Before you use teleoperation, ensure:
 
 - BeamNG.tech is installed and running on a host machine.
-- Your ROS 2 workspace (for example ``~/ros2_ws``) is built with this repository.
+- Your ROS 2 workspace (referred to as ``<ROS2_WORKSPACE>``, for example ``~/ros2_ws``) is built with this repository.
 - You know the IP and port of your BeamNG.tech instance (referred to as ``<BEAMNG_HOST_IP>`` and ``<BEAMNG_PORT>``).
 
 To start the bridge node, run:
@@ -61,7 +61,7 @@ In a second terminal, load the Italy scenario:
 
 .. code-block:: bash
 
-   cd ~/ros2_ws
+   cd <ROS2_WORKSPACE>
    source install/setup.bash
    ros2 service call /beamng_bridge/start_scenario beamng_msgs/srv/StartScenario \
      "{path_to_scenario_definition: '/config/scenarios/example_italy.json'}"
@@ -75,7 +75,7 @@ In a third terminal, start the agent node that controls the ``ego`` vehicle:
 
 .. code-block:: bash
 
-   cd ~/ros2_ws
+   cd <ROS2_WORKSPACE>
    source install/setup.bash
    ros2 run beamng_agent beamng_agent \
      --ros-args \
@@ -92,7 +92,7 @@ In a fourth **interactive** terminal, start the keyboard teleop for ground vehic
 
 .. code-block:: bash
 
-   cd ~/ros2_ws
+   cd <ROS2_WORKSPACE>
    source install/setup.bash
    ros2 run beamng_teleop_keyboard teleop
 
@@ -129,7 +129,7 @@ In a second terminal, load the drone scenario:
 
 .. code-block:: bash
 
-   cd ~/ros2_ws
+   cd <ROS2_WORKSPACE>
    source install/setup.bash
    ros2 service call /beamng_bridge/start_scenario beamng_msgs/srv/StartScenario \
      "{path_to_scenario_definition: '/config/scenarios/drone_scenario.json'}"
@@ -141,7 +141,7 @@ In a third terminal, start the drone controller:
 
 .. code-block:: bash
 
-   cd ~/ros2_ws
+   cd <ROS2_WORKSPACE>
    source install/setup.bash
    ros2 launch beamng_bringup beamng_drone_controller.launch.py \
      host:=<BEAMNG_HOST_IP> port:=<BEAMNG_PORT> vehicle_id:=drone
@@ -153,7 +153,7 @@ In a fourth **interactive** terminal (do not use a launch file), start the keybo
 
 .. code-block:: bash
 
-   cd ~/ros2_ws
+   cd <ROS2_WORKSPACE>
    source install/setup.bash
    ros2 run beamng_teleop_keyboard drone_teleop
 
