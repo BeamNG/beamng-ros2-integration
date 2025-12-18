@@ -1,0 +1,20 @@
+{
+  "version": 1.0,
+  "level": "west_coast_usa",
+  "name": "wcusa_drone_scenario",
+  "mode": "None",
+  "network_visualization": "off",
+  "vehicles": [
+    {
+      "name": "drone",
+      "model": "drone",
+      "pos": [-717.0, 101.0, 130.0],
+      "rot": [0.0, 0.0, 0.3826834, 0.9238795],
+      "options": {
+        "ctrl": "droneInput"
+      }
+    }
+  ]
+}
+
+

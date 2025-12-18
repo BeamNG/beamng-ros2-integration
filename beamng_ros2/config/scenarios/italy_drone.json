@@ -1,0 +1,20 @@
+{
+  "version": 1.0,
+  "level": "italy",
+  "name": "italy_drone_scenario",
+  "mode": "None",
+  "network_visualization": "off",
+  "vehicles": [
+    {
+      "name": "drone",
+      "model": "drone",
+      "pos": [237.90, -894.42, 260.0],
+      "rot": [0.0, 0.0, -0.6354, 0.7720],
+      "options": {
+        "ctrl": "droneInput"
+      }
+    }
+  ]
+}
+
+
