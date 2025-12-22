@@ -1,0 +1,26 @@
+{
+  "version": 1.0,
+  "level": "tech_ground",
+  "name": "drone_scenario",
+  "vehicles": [
+    {
+      "name": "drone",
+      "model": "drone",
+      "pos": [
+        0.0,
+        0.0,
+        5.0
+      ],
+      "rot": [
+        0.0,
+        0.0,
+        0.0,
+        1.0
+      ],
+      "options": {
+        "ctrl": "droneInput"
+      }
+    }
+  ]
+}
+

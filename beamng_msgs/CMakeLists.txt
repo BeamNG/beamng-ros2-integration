@@ -50,6 +50,7 @@ rosidl_generate_interfaces(${PROJECT_NAME}
   "msg/VehicleControl.msg"
   "msg/VehicleInfo.msg"
   "msg/WheelThermals.msg"
+  "msg/DroneControl.msg"
   "action/Step.action"
 
   DEPENDENCIES std_msgs geometry_msgs

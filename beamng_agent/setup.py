@@ -15,6 +15,9 @@ setup(
     license="MIT",
     tests_require=["pytest"],
     entry_points={
-        "console_scripts": ["beamng_agent = beamng_agent.beamng_agent:main"],
+        "console_scripts": [
+            "beamng_agent = beamng_agent.beamng_agent:main",
+            "drone_controller = beamng_agent.drone_controller:main",
+        ],
     },
 )
