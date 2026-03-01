@@ -305,12 +305,7 @@ class DroneControllerNode(Node):
                 except Exception:
                     pass  # Ignore errors if methods aren't available
 
-            # Debug logging (only log when there's actual input to reduce spam)
-            if msg.ascend > 0.0 or msg.descend > 0.0 or abs(msg.pitch) > 0.001 or abs(msg.roll) > 0.001 or abs(msg.yaw) > 0.001:
-                self.get_logger().info(
-                    f"Sending drone inputs: ascend={msg.ascend:.2f}, descend={msg.descend:.2f}, "
-                    f"pitch={msg.pitch:.2f}, roll={msg.roll:.2f}, yaw={msg.yaw:.2f}"
-                )
+            # Logging disabled - was flooding terminal at ~20 Hz
 
         except Exception as e:
             self.get_logger().error(f"Error sending drone inputs: {str(e)}")

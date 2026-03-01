@@ -22,6 +22,18 @@ STEP_SIZE = 0.1
 msg = """
 Control your drone in BeamNG.Tech simulator !
 ---------------------------
+
+Setup (Terminal 1 - launch):
+  cd ~/ros2_ws
+  source install/setup.bash
+  ros2 launch beamng_bringup beamng_drone_all.launch.py host:=<IP> port:=25252
+
+Setup (Terminal 2 - this teleop):
+  cd ~/ros2_ws
+  source install/setup.bash
+  ros2 run beamng_teleop_keyboard drone_teleop
+
+---------------------------
 Moving around:
         w
    a    s    d
@@ -37,6 +49,7 @@ m : toggle flight mode
 space key, s : hover (stop all movement)
 
 CTRL-C to quit
+
 """
 
 e = """
@@ -47,10 +60,14 @@ Please revise back your scripts and launch files
 """
 
 
-def getKey(fd):
-    """Read single key without echo."""
+def getKey(fd, raw_mode=False):
+    """Read single key. If raw_mode=True, fd is already in raw mode (no echo)."""
     if os.name == "nt":
         return msvcrt.getch()
+
+    if raw_mode:
+        rlist, _, _ = select.select([sys.stdin], [], [], 0.01)
+        return sys.stdin.read(1) if rlist else ""
 
     old = termios.tcgetattr(fd)
     try:
@@ -117,10 +134,13 @@ class DroneTeleopNode(Node):
 
         print(msg, end="", flush=True)
         try:
+            if os.name != "nt":
+                tty.setraw(self.term_fd)  # Keep raw for whole session - no key echo
             self.run()
         except Exception as e:
             self.get_logger().error(str(e))
         finally:
+            print()  # Newline after status line
             control_msg = DroneControl()
             control_msg.ascend = 0.0
             control_msg.descend = 0.0
@@ -135,9 +155,18 @@ class DroneTeleopNode(Node):
                 except (termios.error, OSError):
                     pass  # Ignore errors when restoring terminal settings
 
+    def _print_status(self):
+        """Print current velocity/control values (updates in place)."""
+        status = (
+            f"  Ascend:{self.ascend:+5.2f} Descend:{self.descend:+5.2f} "
+            f"Pitch:{self.pitch:+5.2f} Roll:{self.roll:+5.2f} Yaw:{self.yaw:+5.2f}"
+        )
+        print(f"\r{status:<60}", end="", flush=True)
+
     def run(self):
+        self._print_status()  # Initial status line
         while True:
-            key = getKey(self.term_fd)
+            key = getKey(self.term_fd, raw_mode=(os.name != "nt"))
             
             # Vertical controls
             if key == "w":
@@ -165,17 +194,15 @@ class DroneTeleopNode(Node):
             elif key == "k":
                 self.pitch = constrain(self.pitch - STEP_SIZE, -DRONE_MAX_PITCH, DRONE_MAX_PITCH)
 
-            # Toggle controls (log these - important actions)
+            # Toggle controls
             elif key == "t":
                 self.takeoff_land_pending = True
                 self.takeoff_land_counter = 3
                 self.takeoff_land_state = not self.takeoff_land_state
-                self.get_logger().info(f"Takeoff/Land: {'takeoff' if self.takeoff_land_state else 'land'}")
             elif key == "m":
                 self.toggle_mode_pending = True
                 self.toggle_mode_counter = 3
                 self.toggle_mode_state = not self.toggle_mode_state
-                self.get_logger().info(f"Flight mode toggled")
             
             # Stop/hover
             elif key == " " or key == "s":
@@ -219,6 +246,7 @@ class DroneTeleopNode(Node):
                 control_msg.toggle_mode = False
 
             self.pub.publish(control_msg)
+            self._print_status()
 
 
 def main(args=None):
