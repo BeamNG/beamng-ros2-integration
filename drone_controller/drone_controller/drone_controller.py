@@ -75,7 +75,7 @@ class DroneController(Node):
             "/drone_control",
             10
         )
-        
+
         # Control timer
         timer_period = 1.0 / control_rate
         self.timer = self.create_timer(timer_period, self.control_loop)
@@ -184,7 +184,7 @@ class DroneController(Node):
         drone_control.takeoff_land = False
         drone_control.toggle_mode = False
         self.drone_control_pub.publish(drone_control)
-        
+
         # Log at lower frequency to avoid spam
         if int(self.get_clock().now().nanoseconds / 1e9) % 2 == 0:
             self.get_logger().debug(

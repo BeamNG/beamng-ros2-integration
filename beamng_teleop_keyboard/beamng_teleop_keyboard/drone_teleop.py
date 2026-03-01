@@ -113,6 +113,7 @@ class DroneTeleopNode(Node):
                 sys.exit(1)
         else:
             self.settings = None
+            self.term_fd = None  # Not used on Windows
 
         print(msg, end="", flush=True)
         try:
@@ -136,7 +137,7 @@ class DroneTeleopNode(Node):
 
     def run(self):
         while True:
-            key = getKey(sys.stdin.fileno())
+            key = getKey(self.term_fd)
             
             # Vertical controls
             if key == "w":
@@ -163,7 +164,7 @@ class DroneTeleopNode(Node):
                 self.pitch = constrain(self.pitch + STEP_SIZE, -DRONE_MAX_PITCH, DRONE_MAX_PITCH)
             elif key == "k":
                 self.pitch = constrain(self.pitch - STEP_SIZE, -DRONE_MAX_PITCH, DRONE_MAX_PITCH)
-            
+
             # Toggle controls (log these - important actions)
             elif key == "t":
                 self.takeoff_land_pending = True
