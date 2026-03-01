@@ -47,18 +47,21 @@ Please revise back your scripts and launch files
 """
 
 
-def getKey(settings):
+def getKey(fd):
+    """Read single key without echo."""
     if os.name == "nt":
         return msvcrt.getch()
 
-    tty.setraw(sys.stdin.fileno())
-    rlist, _, _ = select.select([sys.stdin], [], [], 0.01)
-    if rlist:
-        key = sys.stdin.read(1)
-    else:
-        key = ""
-
-    termios.tcsetattr(sys.stdin, termios.TCSADRAIN, settings)
+    old = termios.tcgetattr(fd)
+    try:
+        tty.setraw(fd)
+        rlist, _, _ = select.select([sys.stdin], [], [], 0.01)
+        if rlist:
+            key = sys.stdin.read(1)
+        else:
+            key = ""
+    finally:
+        termios.tcsetattr(fd, termios.TCSADRAIN, old)
     return key
 
 
@@ -75,7 +78,6 @@ class DroneTeleopNode(Node):
         super().__init__("drone_teleop")
         self.pub = self.create_publisher(DroneControl, "/drone_control", 10)
 
-        self.status = 0
         self.ascend = 0.0
         self.descend = 0.0
         self.pitch = 0.0
@@ -94,7 +96,8 @@ class DroneTeleopNode(Node):
         if os.name != "nt":
             if sys.stdin.isatty():
                 try:
-                    self.settings = termios.tcgetattr(sys.stdin)
+                    self.term_fd = sys.stdin.fileno()
+                    self.settings = termios.tcgetattr(self.term_fd)
                 except (termios.error, OSError) as e:
                     self.get_logger().error(
                         f"Cannot access terminal. Please run this node in an interactive terminal.\n"
@@ -111,7 +114,7 @@ class DroneTeleopNode(Node):
         else:
             self.settings = None
 
-        self.get_logger().info(msg)
+        print(msg, end="", flush=True)
         try:
             self.run()
         except Exception as e:
@@ -127,67 +130,51 @@ class DroneTeleopNode(Node):
 
             if os.name != "nt" and hasattr(self, 'settings') and self.settings is not None:
                 try:
-                    termios.tcsetattr(sys.stdin, termios.TCSADRAIN, self.settings)
+                    termios.tcsetattr(self.term_fd, termios.TCSADRAIN, self.settings)
                 except (termios.error, OSError):
                     pass  # Ignore errors when restoring terminal settings
 
     def run(self):
         while True:
-            key = getKey(self.settings)
+            key = getKey(sys.stdin.fileno())
             
             # Vertical controls
             if key == "w":
                 self.ascend = constrain(self.ascend + STEP_SIZE, 0.0, DRONE_MAX_ASCEND)
                 self.descend = 0.0
-                self.status += 1
-                self.get_logger().info(f"Ascend: {self.ascend:.2f}")
             elif key == "x":
                 self.descend = constrain(self.descend + STEP_SIZE, 0.0, DRONE_MAX_DESCEND)
                 self.ascend = 0.0
-                self.status += 1
-                self.get_logger().info(f"Descend: {self.descend:.2f}")
             
             # Roll controls
             elif key == "a":
                 self.roll = constrain(self.roll - STEP_SIZE, -DRONE_MAX_ROLL, DRONE_MAX_ROLL)
-                self.status += 1
-                self.get_logger().info(f"Roll left: {self.roll:.2f}")
             elif key == "d":
                 self.roll = constrain(self.roll + STEP_SIZE, -DRONE_MAX_ROLL, DRONE_MAX_ROLL)
-                self.status += 1
-                self.get_logger().info(f"Roll right: {self.roll:.2f}")
             
             # Yaw controls
             elif key == "q":
                 self.yaw = constrain(self.yaw - STEP_SIZE, -DRONE_MAX_YAW, DRONE_MAX_YAW)
-                self.status += 1
-                self.get_logger().info(f"Yaw left: {self.yaw:.2f}")
             elif key == "e":
                 self.yaw = constrain(self.yaw + STEP_SIZE, -DRONE_MAX_YAW, DRONE_MAX_YAW)
-                self.status += 1
-                self.get_logger().info(f"Yaw right: {self.yaw:.2f}")
             
             # Pitch controls
             elif key == "i":
                 self.pitch = constrain(self.pitch + STEP_SIZE, -DRONE_MAX_PITCH, DRONE_MAX_PITCH)
-                self.status += 1
-                self.get_logger().info(f"Pitch forward: {self.pitch:.2f}")
             elif key == "k":
                 self.pitch = constrain(self.pitch - STEP_SIZE, -DRONE_MAX_PITCH, DRONE_MAX_PITCH)
-                self.status += 1
-                self.get_logger().info(f"Pitch backward: {self.pitch:.2f}")
             
-            # Toggle controls
+            # Toggle controls (log these - important actions)
             elif key == "t":
-                self.takeoff_land_pending = True  # Set flag to send toggle on next message
-                self.takeoff_land_counter = 3  # Send toggle for 3 messages to ensure it's received
+                self.takeoff_land_pending = True
+                self.takeoff_land_counter = 3
                 self.takeoff_land_state = not self.takeoff_land_state
-                self.get_logger().info(f"Takeoff/Land toggle: {self.takeoff_land_state}")
+                self.get_logger().info(f"Takeoff/Land: {'takeoff' if self.takeoff_land_state else 'land'}")
             elif key == "m":
-                self.toggle_mode_pending = True  # Set flag to send toggle on next message
-                self.toggle_mode_counter = 3  # Send toggle for 3 messages to ensure it's received
+                self.toggle_mode_pending = True
+                self.toggle_mode_counter = 3
                 self.toggle_mode_state = not self.toggle_mode_state
-                self.get_logger().info(f"Flight mode toggle: {self.toggle_mode_state}")
+                self.get_logger().info(f"Flight mode toggled")
             
             # Stop/hover
             elif key == " " or key == "s":
@@ -196,14 +183,9 @@ class DroneTeleopNode(Node):
                 self.pitch = 0.0
                 self.roll = 0.0
                 self.yaw = 0.0
-                self.get_logger().info("Hover mode - all controls reset")
             else:
                 if key == "\x03":
                     break
-
-            if self.status == 20:
-                self.get_logger().info(msg)  # msg here refers to the module-level help string
-                self.status = 0
 
             # Publish drone control message
             control_msg = DroneControl()

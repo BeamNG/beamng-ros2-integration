@@ -5,6 +5,8 @@ from rclpy.node import Node
 from geometry_msgs.msg import Twist, TwistStamped
 from std_msgs.msg import Float64MultiArray, Header
 
+from beamng_msgs.msg import DroneControl
+
 
 class DroneController(Node):
     """
@@ -17,6 +19,7 @@ class DroneController(Node):
     Publishes:
         - /drone/cmd_vel (geometry_msgs/Twist): Drone velocity control commands
         - /drone/thrust (std_msgs/Float64MultiArray): Thrust commands [thrust, roll, pitch, yaw]
+        - /drone_control (beamng_msgs/DroneControl): BeamNG drone input (for beamng_drone_controller)
     """
 
     def __init__(self):
@@ -64,6 +67,12 @@ class DroneController(Node):
         self.thrust_pub = self.create_publisher(
             Float64MultiArray,
             "drone/thrust",
+            10
+        )
+        
+        self.drone_control_pub = self.create_publisher(
+            DroneControl,
+            "/drone_control",
             10
         )
         
@@ -153,6 +162,28 @@ class DroneController(Node):
         thrust_msg = Float64MultiArray()
         thrust_msg.data = [thrust, roll, pitch, yaw]
         self.thrust_pub.publish(thrust_msg)
+        
+        # Publish BeamNG DroneControl (ascend/descend from vertical, pitch/roll/yaw normalized)
+        drone_control = DroneControl()
+        if thrust > self.base_thrust:
+            drone_control.ascend = (thrust - self.base_thrust) / (
+                self.max_thrust - self.base_thrust
+            ) if self.max_thrust > self.base_thrust else 0.0
+            drone_control.descend = 0.0
+        elif thrust < self.base_thrust:
+            drone_control.ascend = 0.0
+            drone_control.descend = (self.base_thrust - thrust) / self.base_thrust if self.base_thrust > 0 else 0.0
+        else:
+            drone_control.ascend = 0.0
+            drone_control.descend = 0.0
+        drone_control.pitch = pitch
+        drone_control.roll = roll
+        drone_control.yaw = yaw
+        drone_control.yaw_left = 0.0
+        drone_control.yaw_right = 0.0
+        drone_control.takeoff_land = False
+        drone_control.toggle_mode = False
+        self.drone_control_pub.publish(drone_control)
         
         # Log at lower frequency to avoid spam
         if int(self.get_clock().now().nanoseconds / 1e9) % 2 == 0:

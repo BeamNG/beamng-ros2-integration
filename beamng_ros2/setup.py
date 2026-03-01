@@ -39,6 +39,7 @@ setup(
         "console_scripts": [
             "beamng_bridge = beamng_ros2.beamng:main",
             "example_client = beamng_ros2.examples.example_client:main",
+            "start_scenario = beamng_ros2.examples.start_scenario:main",
         ],
     },
 )

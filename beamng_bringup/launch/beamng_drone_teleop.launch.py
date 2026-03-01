@@ -1,38 +1,22 @@
 from launch import LaunchDescription
 from launch.actions import LogInfo
+from launch_ros.actions import Node
+
 
 def generate_launch_description():
     """
     Launch description for BeamNG drone teleop.
-    
-    NOTE: This launch file does NOT actually launch the teleop node because
-    it requires an interactive terminal (TTY) for keyboard input.
-    
-    To use the drone teleop, run it directly in a terminal:
-        ros2 run beamng_teleop_keyboard drone_teleop
-    
-    Or use the alias (if added to .bashrc):
-        drone_teleop
+
+    Launches the cmd_vel converter so that /cmd_vel (and /cmd_vel_stamped) are
+    converted to /drone_control for the BeamNG drone. The keyboard teleop
+    still requires an interactive terminal and must be run separately.
     """
     return LaunchDescription([
-        LogInfo(
-            msg=[
-                "=" * 60,
-                "Drone Teleop Launch File",
-                "=" * 60,
-                "",
-                "The drone teleop requires an interactive terminal and cannot",
-                "be launched via this launch file.",
-                "",
-                "Please run the teleop directly in a terminal:",
-                "  ros2 run beamng_teleop_keyboard drone_teleop",
-                "",
-                "Make sure you have:",
-                "  1. Started the drone scenario",
-                "  2. Started the drone controller node",
-                "  3. Then run the teleop in a separate terminal",
-                "=" * 60,
-            ]
-        )
+        Node(
+            package="drone_controller",
+            executable="drone_controller",
+            name="cmd_vel_to_drone_control",
+            output="screen",
+        ),
     ])
 

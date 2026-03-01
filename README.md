@@ -66,6 +66,8 @@ To use this project, a basic knowledge of the BeamNG.tech simulator and the Beam
 
 For detailed setup and teleoperation examples (ground vehicles and drone), see the online documentation linked at the top of this README.
 
+For **drone integration**, a full set of setup and testing commands is in [docs/DRONE_TESTING.md](docs/DRONE_TESTING.md).
+
 ### Steps
 1. After setting up BeamNG.tech and BeamNGpy with a Python environment, the simulation needs to be listening on the BeamNGpy socket. To do that, you can follow the "Connect to BeamNGpy" [documentation](https://documentation.beamng.com/beamng_tech/arguments_and_settings/#connect-to-beamngpy).
 

@@ -9,7 +9,7 @@ def generate_launch_description():
     return LaunchDescription([
         DeclareLaunchArgument(
             'host',
-            default_value='192.168.1.133',
+            default_value='192.168.1.125',
             description='BeamNG.tech host IP address'
         ),
         DeclareLaunchArgument(

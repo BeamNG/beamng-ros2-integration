@@ -1,6 +1,7 @@
 #!/usr/bin/env python3
 
 import sys
+import time
 import rclpy
 from rclpy.node import Node
 from beamng_msgs.msg import DroneControl
@@ -38,13 +39,47 @@ class DroneControllerNode(Node):
             )
             sys.exit(1)
 
-        # Get vehicle
-        current_vehicles = self.game_client.get_current_vehicles()
-
-        assert (
-            vehicle_id in current_vehicles.keys()
-        ), f"no vehicle with id {vehicle_id} exists"
-        self.vehicle_client = current_vehicles[vehicle_id]
+        # Get vehicle - wait indefinitely (level may still be loading or scenario not started)
+        current_vehicles = {}
+        attempt = 0
+        while True:
+            current_vehicles = self.game_client.get_current_vehicles()
+            if current_vehicles:
+                break
+            attempt += 1
+            if attempt == 1 or attempt % 5 == 0:
+                self.get_logger().info(
+                    f"Waiting for vehicles... (attempt {attempt})"
+                )
+            time.sleep(2)
+        # Try by key first, then by vid (BeamNG.drive may use different IDs)
+        self.vehicle_client = None
+        if vehicle_id in current_vehicles.keys():
+            self.vehicle_client = current_vehicles[vehicle_id]
+        else:
+            # Fallback: match by vehicle vid (e.g. when launched with -vehicle drone)
+            for vid, vehicle in current_vehicles.items():
+                if hasattr(vehicle, 'vid') and vehicle.vid == vehicle_id:
+                    self.vehicle_client = vehicle
+                    self.get_logger().info(
+                        f"Found vehicle by vid: '{vehicle_id}' (key was '{vid}')"
+                    )
+                    break
+            if self.vehicle_client is None:
+                # Fallback: use player vehicle when only one exists
+                if len(current_vehicles) == 1:
+                    self.vehicle_client = next(iter(current_vehicles.values()))
+                    self.get_logger().info(
+                        f"Using sole vehicle '{self.vehicle_client.vid}' "
+                        f"(requested '{vehicle_id}' not in keys: {list(current_vehicles.keys())})"
+                    )
+        if self.vehicle_client is None:
+            self.get_logger().error(
+                f"No vehicle with id '{vehicle_id}' found. "
+                f"Available: {list(current_vehicles.keys())} "
+                f"(vids: {[getattr(v, 'vid', '?') for v in current_vehicles.values()]})"
+            )
+            sys.exit(1)
         try:
             self.vehicle_client.connect(self.game_client)
             vid = self.vehicle_client.vid
@@ -83,8 +118,8 @@ class DroneControllerNode(Node):
             "IMPORTANT: Press 't' in the teleop to toggle takeoff/land before the drone can move!"
         )
         
-        # Verify droneInput controller exists after a short delay
-        self.create_timer(2.0, self.verify_drone_controller)
+        # Verify droneInput controller exists once after a short delay
+        self._verify_timer = self.create_timer(2.0, self._verify_drone_controller_once)
         
         # Message counter for debugging
         self.message_count = 0
@@ -135,22 +170,14 @@ class DroneControllerNode(Node):
             import traceback
             self.get_logger().error(traceback.format_exc())
     
-    def verify_drone_controller(self):
-        """Verify that the droneInput controller exists and list available controllers."""
+    def _verify_drone_controller_once(self):
+        """Verify droneInput controller exists (runs once at startup)."""
+        self._verify_timer.cancel()
         try:
-            # List all available controllers
-            list_cmd = "local controllers = controller.getControllers(); local names = {}; for k,v in pairs(controllers) do table.insert(names, k) end; return table.concat(names, ', ')"
-            self.get_logger().info("Checking available controllers on drone...")
-            
-            # Try to get controller info
-            info_cmd = "log('I', 'DRONE_CTRL', 'Available controllers check')"
-            self.vehicle_client.queue_lua_command(info_cmd)
-            
-            # Check if droneInput exists
             check_cmd = "local ctrl = controller.getControllerSafe('droneInput'); if ctrl then log('I', 'DRONE_CTRL', 'droneInput controller FOUND') else log('E', 'DRONE_CTRL', 'droneInput controller NOT FOUND') end"
             self.vehicle_client.queue_lua_command(check_cmd)
             self.vehicle_client.poll_sensors()
-            self.get_logger().info("Controller verification commands sent - check BeamNG console for results")
+            self.get_logger().info("Drone ready. Run 'ros2 run beamng_teleop_keyboard drone_teleop' in another terminal to control.")
         except Exception as e:
             self.get_logger().warn(f"Could not verify droneInput controller: {e}")
             self.get_logger().warn("The drone may not have the droneInput controller loaded!")
