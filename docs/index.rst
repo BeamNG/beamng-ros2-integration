@@ -9,6 +9,10 @@ Integration of BeamNG.tech into the ROS2 ecosystem.
    Introduction <readme.rst>
    beamng_ros2/index.rst
    beamng_msgs/index.rst
+   drone_controller/index.rst
+   beamng_teleop_keyboard/index.rst
+   beamng_agent/index.rst
+   beamng_bringup/index.rst
    changelog.rst
 
 .. toctree::

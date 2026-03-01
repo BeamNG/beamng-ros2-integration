@@ -14,18 +14,31 @@ def pre_build(root_dir, source_dir, output_dir):
 
 
 def run_api_doc(root_dir, source_dir, output_dir):
-    src = f"{root_dir}/beamng_ros2/beamng_ros2"
-    dst = f"{source_dir}/beamng_ros2/api"
-    cmd = ["sphinx-apidoc", "-e", "-o", dst, src]
-    result = subprocess.run(cmd, check=True, capture_output=True, text=True)
-    print(result.stdout)
-    print(result.stderr)
+    api_packages = [
+        ("beamng_ros2", "beamng_ros2"),
+        ("drone_controller", "drone_controller"),
+        ("beamng_teleop_keyboard", "beamng_teleop_keyboard"),
+        ("beamng_agent", "beamng_agent"),
+    ]
+    for pkg_name, pkg_src in api_packages:
+        src = f"{root_dir}/{pkg_name}/{pkg_src}"
+        dst = f"{source_dir}/{pkg_name}/api"
+        if not os.path.isdir(src):
+            continue
+        cmd = ["sphinx-apidoc", "-e", "-o", dst, src]
+        result = subprocess.run(cmd, check=True, capture_output=True, text=True)
+        print(result.stdout)
+        print(result.stderr)
 
 
 def copy_files(root_dir, source_dir, output_dir):
     files = [
         (f"{root_dir}/beamng_ros2/package.xml", f"{source_dir}/beamng_ros2/standard_docs/original/package.xml"),
         (f"{root_dir}/beamng_msgs/package.xml", f"{source_dir}/beamng_msgs/standard_docs/original/package.xml"),
+        (f"{root_dir}/drone_controller/package.xml", f"{source_dir}/drone_controller/standard_docs/original/package.xml"),
+        (f"{root_dir}/beamng_teleop_keyboard/package.xml", f"{source_dir}/beamng_teleop_keyboard/standard_docs/original/package.xml"),
+        (f"{root_dir}/beamng_agent/package.xml", f"{source_dir}/beamng_agent/standard_docs/original/package.xml"),
+        (f"{root_dir}/beamng_bringup/package.xml", f"{source_dir}/beamng_bringup/standard_docs/original/package.xml"),
     ]
     for src_file, dst_file in files:
         d = os.path.dirname(dst_file)
@@ -47,8 +60,15 @@ def cleanup(root_dir, source_dir, output_dir):
     items = [
         f"{source_dir}/beamng_ros2/standard_docs/original",
         f"{source_dir}/beamng_msgs/standard_docs/original",
+        f"{source_dir}/drone_controller/standard_docs/original",
+        f"{source_dir}/beamng_teleop_keyboard/standard_docs/original",
+        f"{source_dir}/beamng_agent/standard_docs/original",
+        f"{source_dir}/beamng_bringup/standard_docs/original",
         f"{source_dir}/beamng_ros2/api",
         f"{source_dir}/beamng_msgs/interfaces",
+        f"{source_dir}/drone_controller/api",
+        f"{source_dir}/beamng_teleop_keyboard/api",
+        f"{source_dir}/beamng_agent/api",
     ]
     for item in items:
         if os.path.isfile(item):
