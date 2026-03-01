@@ -7,3 +7,9 @@ Launch files for streamlined integration of BeamNG.tech with ROS2.
    :maxdepth: 2
 
    Standard Documents <standards>
+
+.. toctree::
+   :titlesonly:
+   :maxdepth: 2
+
+   Documentation <user_docs>

@@ -8,3 +8,9 @@ ROS2 drone controller node for commanding drones in BeamNG.tech.
 
    Python API <api/modules>
    Standard Documents <standards>
+
+.. toctree::
+   :titlesonly:
+   :maxdepth: 2
+
+   Documentation <user_docs>
