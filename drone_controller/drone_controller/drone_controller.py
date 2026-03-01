@@ -31,48 +31,65 @@ class DroneController(Node):
         self.declare_parameter("max_thrust", 1.0)
         self.declare_parameter("base_thrust", 0.5)  # Hover thrust
         self.declare_parameter("control_rate", 50.0)  # Hz
-        
+        self.declare_parameter("cmd_timeout", 0.5)  # Seconds before stopping on stale commands
+
+        # Topic parameters (subscribe)
+        self.declare_parameter("cmd_vel_topic", "cmd_vel")
+        self.declare_parameter("cmd_vel_stamped_topic", "cmd_vel_stamped")
+
+        # Topic parameters (publish)
+        self.declare_parameter("drone_cmd_vel_topic", "drone/cmd_vel")
+        self.declare_parameter("drone_thrust_topic", "drone/thrust")
+        self.declare_parameter("drone_control_topic", "/drone_control")
+
         self.max_linear_vel = self.get_parameter("max_linear_velocity").value
         self.max_angular_vel = self.get_parameter("max_angular_velocity").value
         self.max_thrust = self.get_parameter("max_thrust").value
         self.base_thrust = self.get_parameter("base_thrust").value
         control_rate = self.get_parameter("control_rate").value
-        
+        self.cmd_timeout = self.get_parameter("cmd_timeout").value
+
+        cmd_vel_topic = self.get_parameter("cmd_vel_topic").value
+        cmd_vel_stamped_topic = self.get_parameter("cmd_vel_stamped_topic").value
+        drone_cmd_vel_topic = self.get_parameter("drone_cmd_vel_topic").value
+        drone_thrust_topic = self.get_parameter("drone_thrust_topic").value
+        drone_control_topic = self.get_parameter("drone_control_topic").value
+
         # State variables
         self.current_cmd = Twist()
         self.last_cmd_time = self.get_clock().now()
-        
+
         # Subscribers
         self.cmd_vel_sub = self.create_subscription(
             Twist,
-            "cmd_vel",
+            cmd_vel_topic,
             self.cmd_vel_callback,
             10
         )
-        
+
         self.cmd_vel_stamped_sub = self.create_subscription(
             TwistStamped,
-            "cmd_vel_stamped",
+            cmd_vel_stamped_topic,
             self.cmd_vel_stamped_callback,
             10
         )
-        
+
         # Publishers
         self.cmd_vel_pub = self.create_publisher(
             Twist,
-            "drone/cmd_vel",
+            drone_cmd_vel_topic,
             10
         )
-        
+
         self.thrust_pub = self.create_publisher(
             Float64MultiArray,
-            "drone/thrust",
+            drone_thrust_topic,
             10
         )
-        
+
         self.drone_control_pub = self.create_publisher(
             DroneControl,
-            "/drone_control",
+            drone_control_topic,
             10
         )
 
@@ -81,6 +98,8 @@ class DroneController(Node):
         self.timer = self.create_timer(timer_period, self.control_loop)
         
         self.get_logger().info("Drone controller initialized")
+        self.get_logger().info(f"  Subscribing: {cmd_vel_topic}, {cmd_vel_stamped_topic}")
+        self.get_logger().info(f"  Publishing: {drone_cmd_vel_topic}, {drone_thrust_topic}, {drone_control_topic}")
         self.get_logger().info(f"  Max linear velocity: {self.max_linear_vel} m/s")
         self.get_logger().info(f"  Max angular velocity: {self.max_angular_vel} rad/s")
         self.get_logger().info(f"  Control rate: {control_rate} Hz")
@@ -109,9 +128,9 @@ class DroneController(Node):
         - linear.z -> vertical thrust (up/down)
         - angular.z -> yaw (rotation)
         """
-        # Check for stale commands (timeout after 0.5 seconds)
+        # Check for stale commands (timeout)
         time_since_cmd = (self.get_clock().now() - self.last_cmd_time).nanoseconds / 1e9
-        if time_since_cmd > 0.5:
+        if time_since_cmd > self.cmd_timeout:
             # No commands received recently, send stop command
             self.current_cmd = Twist()
         

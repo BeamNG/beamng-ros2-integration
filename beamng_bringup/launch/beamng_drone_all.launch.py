@@ -49,6 +49,31 @@ def generate_launch_description():
             default_value="18.0",
             description="Seconds to wait before starting drone controller (scenario must load first)",
         ),
+        DeclareLaunchArgument(
+            "cmd_vel_topic",
+            default_value="cmd_vel",
+            description="Topic for velocity commands (drone_controller)",
+        ),
+        DeclareLaunchArgument(
+            "cmd_vel_stamped_topic",
+            default_value="cmd_vel_stamped",
+            description="Topic for timestamped velocity commands (drone_controller)",
+        ),
+        DeclareLaunchArgument(
+            "drone_cmd_vel_topic",
+            default_value="drone/cmd_vel",
+            description="Topic for converted velocity (drone_controller)",
+        ),
+        DeclareLaunchArgument(
+            "drone_thrust_topic",
+            default_value="drone/thrust",
+            description="Topic for thrust commands (drone_controller)",
+        ),
+        DeclareLaunchArgument(
+            "drone_control_topic",
+            default_value="/drone_control",
+            description="Topic for BeamNG DroneControl (drone_controller)",
+        ),
         # 1. Bridge
         Node(
             package="beamng_ros2",
@@ -100,5 +125,12 @@ def generate_launch_description():
             executable="drone_controller",
             name="cmd_vel_to_drone_control",
             output="screen",
+            parameters=[{
+                "cmd_vel_topic": LaunchConfiguration("cmd_vel_topic"),
+                "cmd_vel_stamped_topic": LaunchConfiguration("cmd_vel_stamped_topic"),
+                "drone_cmd_vel_topic": LaunchConfiguration("drone_cmd_vel_topic"),
+                "drone_thrust_topic": LaunchConfiguration("drone_thrust_topic"),
+                "drone_control_topic": LaunchConfiguration("drone_control_topic"),
+            }],
         ),
     ])
