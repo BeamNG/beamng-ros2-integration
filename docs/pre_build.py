@@ -41,6 +41,8 @@ def copy_files(root_dir, source_dir, output_dir):
         (f"{root_dir}/beamng_bringup/package.xml", f"{source_dir}/beamng_bringup/standard_docs/original/package.xml"),
     ]
     for src_file, dst_file in files:
+        if not os.path.isfile(src_file):
+            continue  # Skip packages that don't exist in this version (e.g. older tags)
         d = os.path.dirname(dst_file)
         if not os.path.isdir(d):
             os.makedirs(d)
