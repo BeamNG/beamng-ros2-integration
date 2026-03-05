@@ -27,6 +27,9 @@ find_package(visualization_msgs REQUIRED)
 find_package(tf2 REQUIRED)
 find_package(tf2_ros REQUIRED)
 find_package(tf2_geometry_msgs REQUIRED)
+find_package(beamng_msgs REQUIRED)
+find_package(rosidl_typesupport_introspection_cpp REQUIRED)
+find_package(rosidl_typesupport_cpp REQUIRED)
 
 set(BEAMNG_LIBRARY ros2_beamng)
 
@@ -34,6 +37,8 @@ add_library(${BEAMNG_LIBRARY} SHARED
   src/init.cpp
   src/beamng_node.cpp
   src/vehicle_node.cpp
+  src/sensor_registry.cpp
+  src/sensor_factories.cpp
 )
 target_include_directories(${BEAMNG_LIBRARY} PUBLIC
   $<BUILD_INTERFACE:${CMAKE_CURRENT_SOURCE_DIR}/include>
@@ -50,6 +55,9 @@ ament_target_dependencies(${BEAMNG_LIBRARY}
   tf2
   tf2_ros
   tf2_geometry_msgs
+  beamng_msgs
+  rosidl_typesupport_introspection_cpp
+  rosidl_typesupport_cpp
 )
 
 install(TARGETS ${BEAMNG_LIBRARY}
