@@ -162,6 +162,21 @@ Use these commands to verify that the drone integration is working.
        yaw_left: 0.0, yaw_right: 0.0, takeoff_land: false, toggle_mode: false}" --once
 
 
+Teleop display
+--------------
+
+When you run ``ros2 run beamng_teleop_keyboard drone_teleop``, it prints the setup
+commands and key bindings at startup. A live status line shows:
+
+- **Key**: last key pressed (e.g. ``w``, ``a``, ``t``, ``m``, ``Space``)
+- **Reading**: current control values being sent (Asc, Desc, Pit, Rol, Yaw)
+- **Mode**: flight mode (``Crawl`` or ``Fixed Wing``)
+
+Example status line::
+
+   Key:     w  |  Reading: Asc:+0.50 Desc:+0.00 Pit:+0.00 Rol:+0.00 Yaw:+0.00  |  Mode:Crawl
+
+
 Drone teleop keys
 -----------------
 
@@ -170,5 +185,5 @@ Drone teleop keys
 - ``a`` / ``d``: roll left / right
 - ``q`` / ``e``: yaw left / right
 - ``i`` / ``k``: pitch forward / backward
-- ``m``: toggle flight mode
+- ``m``: toggle flight mode (Crawl ↔ Fixed Wing); status line shows current mode
 - ``space`` or ``s``: hover / stop

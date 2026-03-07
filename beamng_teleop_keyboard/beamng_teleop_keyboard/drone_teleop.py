@@ -19,6 +19,9 @@ DRONE_MAX_YAW = 1.0
 
 STEP_SIZE = 0.1
 
+# Keys that affect drone control; only these are shown in the status line
+ACCEPTED_KEYS = frozenset("wxadqeki tms")
+
 msg = """
 Control your drone in BeamNG.Tech simulator !
 ---------------------------
@@ -45,7 +48,7 @@ q/e : yaw left/right
 i/k : pitch forward/backward
 
 t : takeoff/land toggle
-m : toggle flight mode
+m : toggle flight mode (Crawl ↔ Fixed Wing) — status line shows current mode
 space key, s : hover (stop all movement)
 
 CTRL-C to quit
@@ -109,6 +112,11 @@ class DroneTeleopNode(Node):
         self.takeoff_land_counter = 0  # Counter to send toggle for multiple messages
         self.toggle_mode_counter = 0  # Counter to send toggle for multiple messages
 
+        # Track flight mode for display (BeamNG default is Crawl)
+        self._flight_mode_name = "Crawl"
+        # Track last key for display
+        self._last_key = "-"
+
         # Check if stdin is a TTY (interactive terminal)
         if os.name != "nt":
             if sys.stdin.isatty():
@@ -155,19 +163,40 @@ class DroneTeleopNode(Node):
                 except (termios.error, OSError):
                     pass  # Ignore errors when restoring terminal settings
 
-    def _print_status(self):
-        """Print current velocity/control values (updates in place)."""
-        status = (
-            f"  Ascend:{self.ascend:+5.2f} Descend:{self.descend:+5.2f} "
-            f"Pitch:{self.pitch:+5.2f} Roll:{self.roll:+5.2f} Yaw:{self.yaw:+5.2f}"
+    def _key_display(self, k):
+        """Return readable key name for display (accepted drone keys only)."""
+        if k not in ACCEPTED_KEYS:
+            return None  # Don't update display for unaccepted keys
+        if k == " ":
+            return "Space"
+        return k
+
+    def _status_str(self):
+        """Build status string (fixed width for clean overwrite)."""
+        return (
+            f"  Key:{self._last_key:>6}  |  Reading: Asc:{self.ascend:+5.2f} Desc:{self.descend:+5.2f} "
+            f"Pit:{self.pitch:+5.2f} Rol:{self.roll:+5.2f} Yaw:{self.yaw:+5.2f}  |  Mode:{self._flight_mode_name}"
         )
-        print(f"\r{status:<60}", end="", flush=True)
+
+    def _print_status_if_changed(self):
+        """Print status only when it changed (avoids terminal flood)."""
+        new_status = self._status_str()
+        if new_status != getattr(self, "_last_status", None):
+            self._last_status = new_status
+            STATUS_WIDTH = 95
+            padding = " " * max(0, STATUS_WIDTH - len(new_status))
+            print(f"\r{new_status}{padding}", end="", flush=True)
 
     def run(self):
-        self._print_status()  # Initial status line
+        self._last_status = None
+        self._print_status_if_changed()
         while True:
             key = getKey(self.term_fd, raw_mode=(os.name != "nt"))
-            
+            if key:
+                display_key = self._key_display(key)
+                if display_key is not None:
+                    self._last_key = display_key
+
             # Vertical controls
             if key == "w":
                 self.ascend = constrain(self.ascend + STEP_SIZE, 0.0, DRONE_MAX_ASCEND)
@@ -200,9 +229,12 @@ class DroneTeleopNode(Node):
                 self.takeoff_land_counter = 3
                 self.takeoff_land_state = not self.takeoff_land_state
             elif key == "m":
+                starting_new_toggle = self.toggle_mode_counter == 0
                 self.toggle_mode_pending = True
                 self.toggle_mode_counter = 3
                 self.toggle_mode_state = not self.toggle_mode_state
+                if starting_new_toggle:
+                    self._flight_mode_name = "Fixed Wing" if self._flight_mode_name == "Crawl" else "Crawl"
             
             # Stop/hover
             elif key == " " or key == "s":
@@ -246,7 +278,7 @@ class DroneTeleopNode(Node):
                 control_msg.toggle_mode = False
 
             self.pub.publish(control_msg)
-            self._print_status()
+            self._print_status_if_changed()
 
 
 def main(args=None):

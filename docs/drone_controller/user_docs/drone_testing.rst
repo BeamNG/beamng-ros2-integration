@@ -21,8 +21,11 @@ All-in-one launch
 -----------------
 
 The :file:`beamng_drone_all.launch.py` launch file starts the bridge, scenario,
-drone controller and cmd_vel converter in one command. Keyboard teleop must still
-run in a separate **interactive** terminal.
+drone controller and cmd_vel converter in one command. You then choose one of two
+control inputs (run in a separate terminal):
+
+- **Keyboard teleop** – for manual testing
+- **MAVROS or any cmd_vel publisher** – for UAV stacks (MAVLink, PX4, etc.)
 
 **Launch with host and port:**
 
@@ -55,13 +58,28 @@ more time to load. Increase the delay:
 
    ros2 launch beamng_bringup beamng_drone_all.launch.py controller_delay:=25.0
 
-**Keyboard teleop** (run in a separate terminal):
+**Control input** (choose one; run in a separate terminal):
 
-.. code-block:: bash
+- **Keyboard teleop** (for manual testing):
 
-   cd <ROS2_WORKSPACE>
-   source install/setup.bash
-   ros2 run beamng_teleop_keyboard drone_teleop
+  .. code-block:: bash
+
+     cd <ROS2_WORKSPACE>
+     source install/setup.bash
+     ros2 run beamng_teleop_keyboard drone_teleop
+
+- **MAVROS or other cmd_vel source** (for MAVLink/UAV stack integration):
+
+  The launch already includes the cmd_vel converter. Instead of keyboard teleop,
+  run your MAVROS (or any node that publishes ``geometry_msgs/Twist`` to
+  ``/cmd_vel``). The converter maps:
+
+  - ``linear.x`` / ``linear.y`` → roll & pitch
+  - ``linear.z`` → thrust (ascend/descend)
+  - ``angular.z`` → yaw rate
+
+  The drone will receive commands via ``/drone_control`` and fly normally.
+  No need to run ``drone_teleop`` when using MAVROS.
 
 
 Setup (alternative: run in order)
@@ -158,6 +176,21 @@ Verification and testing
        yaw_left: 0.0, yaw_right: 0.0, takeoff_land: false, toggle_mode: false}" --once
 
 
+Teleop display
+--------------
+
+When you run ``ros2 run beamng_teleop_keyboard drone_teleop``, it prints the setup
+commands and key bindings at startup. A live status line shows:
+
+- **Key**: last key pressed (e.g. ``w``, ``a``, ``t``, ``m``, ``Space``)
+- **Reading**: current control values being sent (Asc, Desc, Pit, Rol, Yaw)
+- **Mode**: flight mode (``Crawl`` or ``Fixed Wing``)
+
+Example status line::
+
+   Key:     w  |  Reading: Asc:+0.50 Desc:+0.00 Pit:+0.00 Rol:+0.00 Yaw:+0.00  |  Mode:Crawl
+
+
 Drone teleop keys
 -----------------
 
@@ -166,5 +199,5 @@ Drone teleop keys
 - ``a`` / ``d``: roll left / right
 - ``q`` / ``e``: yaw left / right
 - ``i`` / ``k``: pitch forward / backward
-- ``m``: toggle flight mode
+- ``m``: toggle flight mode (Crawl ↔ Fixed Wing); status line shows current mode
 - ``space`` or ``s``: hover / stop
