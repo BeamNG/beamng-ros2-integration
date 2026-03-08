@@ -24,7 +24,7 @@ The :file:`beamng_drone_all.launch.py` launch file starts the bridge, scenario,
 drone controller and cmd_vel converter in one command. Keyboard teleop must still
 run in a separate **interactive** terminal.
 
-**Launch with host and port:**
+**Launch (set host for your setup):**
 
 .. code-block:: bash
 
@@ -34,19 +34,13 @@ run in a separate **interactive** terminal.
      host:=<BEAMNG_HOST_IP> port:=<BEAMNG_PORT> \
      scenario:=/config/scenarios/drone_scenario.json vehicle_id:=drone
 
-**Launch with defaults** (host=172.23.64.1, port=25252):
-
-.. code-block:: bash
-
-   cd <ROS2_WORKSPACE>
-   source install/setup.bash
-   ros2 launch beamng_bringup beamng_drone_all.launch.py
+Use the host IP that matches your setup: same-machine=127.0.0.1, WSL=vEthernet (WSL) from Windows ipconfig, remote=BeamNG machine IP.
 
 **Override individual args:**
 
 .. code-block:: bash
 
-   ros2 launch beamng_bringup beamng_drone_all.launch.py host:=192.168.1.111 port:=25252
+   ros2 launch beamng_bringup beamng_drone_all.launch.py host:=<YOUR_IP> port:=25252
 
 If the drone controller times out (Connection timed out), the scenario may need
 more time to load. Increase the delay:

@@ -23,7 +23,7 @@ def generate_launch_description():
             name='beamng_bridge',
             output='screen',
             parameters=[
-                {'host': '172.21.192.1'}, #127.0.0.1
+                {'host': '127.0.0.1'},
                 {'port': 25252},
                 {'launch': False},
                 {'update_sec': 0.1}

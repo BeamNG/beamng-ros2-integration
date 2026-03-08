@@ -26,8 +26,8 @@ def generate_launch_description():
         ),
         DeclareLaunchArgument(
             "host",
-            default_value="172.23.64.1",
-            description="BeamNG.tech host IP (e.g. WSL2: 172.23.64.1 from ipconfig)",
+            default_value="127.0.0.1",
+            description="BeamNG.tech host IP. Override for your setup: same-machine=127.0.0.1, WSL=vEthernet (WSL) from ipconfig, remote=BeamNG machine IP",
         ),
         DeclareLaunchArgument(
             "port",

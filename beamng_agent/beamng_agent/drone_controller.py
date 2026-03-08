@@ -19,7 +19,7 @@ class DroneControllerNode(Node):
         super().__init__(NODE_NAME)
 
         # Declare parameters
-        host = self.declare_parameter("host", "172.21.192.1").value
+        host = self.declare_parameter("host", "127.0.0.1").value
         port = self.declare_parameter("port", 25252).value
         vehicle_id = self.declare_parameter("vehicle_id", "drone").value
 
@@ -130,39 +130,33 @@ class DroneControllerNode(Node):
         try:
             self.message_count += 1
             
-            # Log toggle messages for debugging
+            # Log toggle messages at debug level
             if msg.takeoff_land or msg.toggle_mode:
                 self.toggle_received_count += 1
-                self.get_logger().info(
-                    f"[MSG #{self.message_count}] Received control msg: takeoff_land={msg.takeoff_land}, "
-                    f"toggle_mode={msg.toggle_mode}, last_takeoff={self.last_takeoff_land}, "
-                    f"last_mode={self.last_toggle_mode} (Total toggles received: {self.toggle_received_count})"
+                self.get_logger().debug(
+                    f"[MSG #{self.message_count}] takeoff_land={msg.takeoff_land}, "
+                    f"toggle_mode={msg.toggle_mode} (total toggles: {self.toggle_received_count})"
                 )
             
             # Handle toggle commands (only trigger when going from False to True - edge-triggered)
             if msg.takeoff_land and not self.last_takeoff_land:
-                # Only trigger when transitioning from False to True
-                self.get_logger().info(f"*** TRIGGERING TAKEOFF/LAND TOGGLE ***")
-                self.get_logger().info(f"Received takeoff_land toggle: {msg.takeoff_land} (was: {self.last_takeoff_land})")
+                self.get_logger().info("Triggering takeoff/land toggle")
                 self._toggle_takeoff_land()
             self.last_takeoff_land = msg.takeoff_land
 
             if msg.toggle_mode and not self.last_toggle_mode:
-                # Only trigger when transitioning from False to True
-                self.get_logger().info(f"*** TRIGGERING FLIGHT MODE TOGGLE ***")
-                self.get_logger().info(f"Received toggle_mode: {msg.toggle_mode} (was: {self.last_toggle_mode})")
+                self.get_logger().info("Triggering flight mode toggle")
                 self._toggle_flight_mode()
             self.last_toggle_mode = msg.toggle_mode
 
             # Store the latest control message (will be sent by timer)
             self.latest_control_msg = msg
             
-            # Periodic status (every 100 messages)
-            if self.message_count % 100 == 0:
-                self.get_logger().info(
-                    f"Status: Processed {self.message_count} messages, "
-                    f"received {self.toggle_received_count} toggle commands, "
-                    f"flight_active={self.flight_active}"
+            # Periodic status at debug level (every 500 messages)
+            if self.message_count % 500 == 0:
+                self.get_logger().debug(
+                    f"Status: {self.message_count} msgs, "
+                    f"{self.toggle_received_count} toggles, flight_active={self.flight_active}"
                 )
 
         except Exception as e:
@@ -190,8 +184,7 @@ class DroneControllerNode(Node):
     def _toggle_takeoff_land(self):
         """Toggle takeoff/land state."""
         try:
-            self.get_logger().info(f"=== TOGGLE TAKEOFF/LAND ===")
-            self.get_logger().info(f"Vehicle ID: {self.vehicle_client.vid}")
+            self.get_logger().info(f"Toggle takeoff/land (vehicle: {self.vehicle_client.vid})")
             
             # Try multiple Lua command formats
             commands_to_try = [
@@ -203,21 +196,21 @@ class DroneControllerNode(Node):
             command_executed = False
             for i, lua_command in enumerate(commands_to_try):
                 try:
-                    self.get_logger().info(f"Trying command format {i+1}: {lua_command}")
+                    self.get_logger().debug(f"Trying command format {i+1}: {lua_command}")
                     self.vehicle_client.queue_lua_command(lua_command)
-                    self.get_logger().info("Lua command queued successfully")
+                    self.get_logger().debug("Lua command queued successfully")
                     
                     # Execute immediately to ensure the command is processed
                     try:
                         self.vehicle_client.poll_sensors()
-                        self.get_logger().info("Polled sensors to execute command")
+                        self.get_logger().debug("Polled sensors to execute command")
                         command_executed = True
                         break
                     except Exception as e1:
                         self.get_logger().warn(f"poll_sensors failed: {e1}, trying step()")
                         try:
                             self.vehicle_client.step(1)
-                            self.get_logger().info("Stepped simulation to execute command")
+                            self.get_logger().debug("Stepped simulation to execute command")
                             command_executed = True
                             break
                         except Exception as e2:
@@ -235,7 +228,6 @@ class DroneControllerNode(Node):
             self.get_logger().info(
                 f"Takeoff/Land toggled. Flight active: {self.flight_active}"
             )
-            self.get_logger().info("=== TOGGLE COMPLETE ===")
         except Exception as e:
             self.get_logger().error(f"Error toggling takeoff/land: {str(e)}")
             import traceback
