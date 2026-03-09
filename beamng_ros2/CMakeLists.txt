@@ -28,6 +28,7 @@ find_package(tf2 REQUIRED)
 find_package(tf2_ros REQUIRED)
 find_package(tf2_geometry_msgs REQUIRED)
 find_package(beamng_msgs REQUIRED)
+find_package(sensor_msgs REQUIRED)
 find_package(rosidl_typesupport_introspection_cpp REQUIRED)
 find_package(rosidl_typesupport_cpp REQUIRED)
 
@@ -56,6 +57,7 @@ ament_target_dependencies(${BEAMNG_LIBRARY}
   tf2_ros
   tf2_geometry_msgs
   beamng_msgs
+  sensor_msgs
   rosidl_typesupport_introspection_cpp
   rosidl_typesupport_cpp
 )

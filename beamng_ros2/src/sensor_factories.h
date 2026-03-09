@@ -1,37 +1,65 @@
 #pragma once
+#include <cstdint>
 #include <functional>
 #include <string>
 #include <unordered_map>
+#include <vector>
 #include <rclcpp/rclcpp.hpp>
 #include "sensor_registry.h"
 
 namespace bng_ros2 {
 
-// Numeric and string value stores, updated each physics step and read at publish time.
-// Each sensor gets its own maps, which are created once and used by reference in PublishFn.
-using ValueMap  = std::unordered_map<std::string, double>;
-using StringMap = std::unordered_map<std::string, std::string>;
+// Flat value stores — one instance per VehicleNode, allocated once at init.
+// Indexed by integer position, so publish-time access is a direct array read with no string hashing.
+using ScalarStore = std::vector<double>;
+using StringStore = std::vector<std::string>;
 
-// Zero-argument callable returned by a RegisterFn. Reads the current values and publishes one typed ROS2 message.
-using PublishFn = std::function<void()>;
+// Scalar sensor publish function.
+// Called by the publish thread with the stable read-slot of the SPSC buffer.
+using PublishFn = std::function<void(const ScalarStore&, const StringStore&)>;
 
-// Called once per sensor at VehicleNode construction time. Creates the ROS2 publisher, resolves field offsets from introspection, and returns a PublishFn.
-using RegisterFn = std::function<PublishFn(rclcpp::Node&,
-                                            const std::string& topic,
-                                            const ValueMap&,
-                                            const StringMap&,
-                                            const SensorConfig&)>;
+// Blob sensor publish function.
+// Called by the publish thread with a pointer into the stable read-slot and the number of valid bytes.
+using BlobPublishFn = std::function<void(const uint8_t* data,
+                                         uint32_t       len,
+                                         uint64_t       ts_ns)>;
+
+// RegisterFn creates a ROS2 publisher and returns a ScalarRegisterResult containing the PublishFn
+// and the exact number of scalar/string slots consumed from ScalarStore/StringStore.
+//
+// BlobRegisterFn creates a ROS2 publisher and returns a BlobPublishFn.
+struct ScalarRegisterResult {
+  PublishFn  publish_fn;
+  uint32_t   scalar_slots_used{0};
+  uint32_t   string_slots_used{0};
+};
+
+using RegisterFn = std::function<ScalarRegisterResult(
+    rclcpp::Node&,
+    const std::string& topic,
+    const SensorConfig&,
+    uint32_t scalar_base_idx,
+    uint32_t string_base_idx)>;
+
+using BlobRegisterFn = std::function<BlobPublishFn(
+    rclcpp::Node&,
+    const std::string& topic,
+    const SensorConfig&)>;
 
 class SensorFactoryRegistry {
   public:
     static SensorFactoryRegistry& instance();
 
-    void register_factory(const std::string& msg_file, RegisterFn fn);
-    const RegisterFn* find(const std::string& msg_file) const;
+    void register_factory     (const std::string& msg_file, RegisterFn     fn);
+    void register_blob_factory(const std::string& msg_file, BlobRegisterFn fn);
+
+    const RegisterFn*     find     (const std::string& msg_file) const;
+    const BlobRegisterFn* find_blob(const std::string& msg_file) const;
 
   private:
     SensorFactoryRegistry() = default;
     std::unordered_map<std::string, RegisterFn> factories_;
+    std::unordered_map<std::string, BlobRegisterFn> blob_factories_;
 };
 
 // Populate SensorFactoryRegistry with all supported message types.

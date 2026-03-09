@@ -5,6 +5,9 @@
 #include <beamng_msgs/msg/state_sensor.hpp>
 #include <beamng_msgs/msg/damage_sensor.hpp>
 #include <beamng_msgs/msg/time_sensor.hpp>
+#include <sensor_msgs/msg/point_cloud2.hpp>
+#include <sensor_msgs/msg/image.hpp>
+#include <sensor_msgs/msg/point_field.hpp>
 #include <rosidl_typesupport_introspection_cpp/field_types.hpp>
 #include <rosidl_typesupport_introspection_cpp/identifier.hpp>
 #include <rosidl_typesupport_introspection_cpp/message_introspection.hpp>
@@ -15,6 +18,7 @@
 #include <type_traits>
 #include <vector>
 #include <cstdint>
+#include <cstring>
 
 namespace bng_ros2 {
 
@@ -30,19 +34,28 @@ void SensorFactoryRegistry::register_factory(const std::string& msg_file, Regist
   factories_[msg_file] = std::move(fn);
 }
 
+void SensorFactoryRegistry::register_blob_factory(const std::string& msg_file, BlobRegisterFn fn) {
+  blob_factories_[msg_file] = std::move(fn);
+}
+
 const RegisterFn* SensorFactoryRegistry::find(const std::string& msg_file) const {
   auto it = factories_.find(msg_file);
   if (it == factories_.end()) return nullptr;
   return &it->second;
 }
 
+const BlobRegisterFn* SensorFactoryRegistry::find_blob(const std::string& msg_file) const {
+  auto it = blob_factories_.find(msg_file);
+  if (it == blob_factories_.end()) return nullptr;
+  return &it->second;
+}
 
 // Describes one active field: resolved once at init, used on every publish.
 struct FieldWriter {
-  std::string value_key;  // key into ValueMap or StringMap
-  size_t      offset;     // byte offset into the message struct
-  uint8_t     type_id;    // rosidl primitive type id
-  bool        is_string;
+  uint32_t value_idx;  // index into ScalarStore (numeric) or StringStore (string)
+  size_t   offset;     // byte offset into the message struct
+  uint8_t  type_id;    // rosidl primitive type id
+  bool     is_string;
 };
 
 struct FieldResolution {
@@ -108,37 +121,27 @@ static void write_string(uint8_t* base, size_t offset, const std::string& v) {
   *reinterpret_cast<std::string*>(base + offset) = v;
 }
 
-static double get_num(const ValueMap& m, const std::string& key) {
-  auto it = m.find(key);
-  return it != m.end() ? it->second : 0.0;
-}
-
-static const std::string& get_str(const StringMap& m, const std::string& key) {
-  static const std::string empty;
-  auto it = m.find(key);
-  return it != m.end() ? it->second : empty;
-}
-
 // C++17 detection trait: does MsgT have a 'header' member?
 template<typename T, typename = void>
 struct has_header : std::false_type {};
 template<typename T>
 struct has_header<T, std::void_t<decltype(std::declval<T&>().header)>> : std::true_type {};
 
-
-// Works for any compiled beamng_msgs message type.
-// At init time: retrieves introspection metadata, resolves field offsets for every field listed in the JSON config, builds a FieldWriter vector.
-// At publish time: iterates FieldWriters and writes values by raw offset.
+// Generic factory for any compiled beamng_msgs message type.
+//
+// At init time: retrieves rosidl introspection metadata, resolves each field from the
+// JSON config to a byte offset and type id, and builds a FieldWriter vector with integer indices into ScalarStore/StringStore.
+//
+// At publish time: iterates the FieldWriters using direct array reads (no string hashing),
+// writes values into the message struct, and publishes.
 template<typename MsgT>
-static PublishFn make_generic_factory(
+static ScalarRegisterResult make_generic_factory(
     rclcpp::Node& node,
     const std::string& topic,
-    const ValueMap& values,
-    const StringMap& string_values,
-    const SensorConfig& sensor_cfg)
+    const SensorConfig& sensor_cfg,
+    uint32_t scalar_base_idx,
+    uint32_t string_base_idx)
 {
-  // rosidl_typesupport_cpp provides the generic type support handle
-  // get_message_typesupport_handle extracts the introspection-specific variant.
   const rosidl_message_type_support_t* ts =
       rosidl_typesupport_cpp::get_message_type_support_handle<MsgT>();
   const rosidl_message_type_support_t* intr_ts =
@@ -147,6 +150,10 @@ static PublishFn make_generic_factory(
 
   std::vector<FieldWriter> writers;
   writers.reserve(sensor_cfg.fields.size());
+
+  uint32_t scalar_local_idx = 0;
+  uint32_t string_local_idx = 0;
+
   for (const auto& field : sensor_cfg.fields) {
     auto res = resolve_field_path(members, field.name);
     if (!res.found) {
@@ -154,44 +161,152 @@ static PublishFn make_generic_factory(
                 << field.name << "' not found in introspection, skipping.\n";
       continue;
     }
-    writers.push_back({field.name, res.offset, res.type_id,
-                        res.type_id == intr::ROS_TYPE_STRING});
+    const bool is_str = (res.type_id == intr::ROS_TYPE_STRING);
+    const uint32_t idx = is_str
+        ? (string_base_idx + string_local_idx++)
+        : (scalar_base_idx + scalar_local_idx++);
+
+    writers.push_back({idx, res.offset, res.type_id, is_str});
   }
 
   auto pub = node.create_publisher<MsgT>(topic, 10);
+  // Capture node as shared_ptr so the lambda never holds a dangling reference.
+  auto node_ptr  = node.shared_from_this();
+  const std::string frame_id = sensor_cfg.frame_id.empty()
+      ? std::string(node.get_name()) : sensor_cfg.frame_id;
 
-  return [pub, &values, &string_values, &node, writers = std::move(writers)]() {
+  PublishFn fn = [pub, node_ptr, frame_id, writers = std::move(writers)](
+      const ScalarStore& scalars, const StringStore& strings)
+  {
     MsgT msg;
     if constexpr (has_header<MsgT>::value) {
-      msg.header.stamp    = node.get_clock()->now();
-      msg.header.frame_id = node.get_name();
+      msg.header.stamp    = node_ptr->get_clock()->now();
+      msg.header.frame_id = frame_id;
     }
 
     auto* base = reinterpret_cast<uint8_t*>(&msg);
     for (const auto& w : writers) {
       if (w.is_string) {
-        write_string(base, w.offset, get_str(string_values, w.value_key));
+        if (w.value_idx < strings.size())
+          write_string(base, w.offset, strings[w.value_idx]);
       } else {
-        write_numeric(base, w.offset, w.type_id, get_num(values, w.value_key));
+        if (w.value_idx < scalars.size())
+          write_numeric(base, w.offset, w.type_id, scalars[w.value_idx]);
       }
     }
 
     pub->publish(msg);
   };
+
+  return {std::move(fn), scalar_local_idx, string_local_idx};
 }
 
+static BlobPublishFn make_pointcloud2_factory(
+    rclcpp::Node& node,
+    const std::string& topic,
+    const SensorConfig& cfg)
+{
+  auto pub = node.create_publisher<sensor_msgs::msg::PointCloud2>(topic, 10);
 
-// To support a new message type: add its #include above and one REGISTER line.
+  // Build a template message with all fixed fields set once at init time.
+  sensor_msgs::msg::PointCloud2 tmpl;
+  tmpl.header.frame_id = cfg.frame_id.empty() ? node.get_name() : cfg.frame_id;
+  tmpl.height          = 1;      // unorganised point cloud
+  tmpl.is_bigendian    = false;
+  tmpl.is_dense        = false;
+
+  const uint32_t stride = cfg.blob_layout.point_stride > 0
+      ? cfg.blob_layout.point_stride : 12u;  // default: xyz float32 = 12 bytes
+
+  tmpl.point_step = stride;
+
+  // "xyz_float32" → three float32 fields at byte offsets 0, 4, 8.
+  if (cfg.blob_layout.format == "xyz_float32" || cfg.blob_layout.format.empty()) {
+    sensor_msgs::msg::PointField fx, fy, fz;
+    fx.name = "x"; fx.offset = 0;  fx.datatype = sensor_msgs::msg::PointField::FLOAT32; fx.count = 1;
+    fy.name = "y"; fy.offset = 4;  fy.datatype = sensor_msgs::msg::PointField::FLOAT32; fy.count = 1;
+    fz.name = "z"; fz.offset = 8;  fz.datatype = sensor_msgs::msg::PointField::FLOAT32; fz.count = 1;
+    tmpl.fields = {fx, fy, fz};
+  }
+
+  // Pre-size the data buffer to max capacity so assign() never reallocates at publish time.
+  const uint32_t max_bytes = cfg.blob_layout.max_bytes;
+  if (max_bytes > 0) {
+    tmpl.data.resize(max_bytes);
+  }
+
+  return [pub, tmpl = std::move(tmpl), stride](
+      const uint8_t* data, uint32_t len, uint64_t ts_ns) mutable
+  {
+    auto msg         = tmpl;
+    msg.header.stamp = rclcpp::Time(static_cast<int64_t>(ts_ns));
+    msg.width        = (stride > 0) ? (len / stride) : 0;
+    msg.row_step     = len;
+    msg.data.assign(data, data + len);
+    pub->publish(msg);
+  };
+}
+
+static BlobPublishFn make_image_factory(
+    rclcpp::Node& node,
+    const std::string& topic,
+    const SensorConfig& cfg)
+{
+  auto pub = node.create_publisher<sensor_msgs::msg::Image>(topic, 10);
+
+  sensor_msgs::msg::Image tmpl;
+  tmpl.header.frame_id = cfg.frame_id.empty() ? node.get_name() : cfg.frame_id;
+  tmpl.width           = cfg.blob_layout.width;
+  tmpl.height          = cfg.blob_layout.height;
+  tmpl.is_bigendian    = false;
+
+  if (cfg.blob_layout.format == "rgba_uint8") {
+    tmpl.encoding = "rgba8";
+    tmpl.step     = cfg.blob_layout.width * 4;
+  } else if (cfg.blob_layout.format == "rgb_uint8") {
+    tmpl.encoding = "rgb8";
+    tmpl.step     = cfg.blob_layout.width * 3;
+  } else if (cfg.blob_layout.format == "depth_float32") {
+    tmpl.encoding = "32FC1";
+    tmpl.step     = cfg.blob_layout.width * 4;
+  } else if (cfg.blob_layout.format == "mono_uint8") {
+    tmpl.encoding = "mono8";
+    tmpl.step     = cfg.blob_layout.width;
+  } else {
+    std::cerr << "[ROS2 WARN] make_image_factory: unknown format '"
+              << cfg.blob_layout.format << "' for sensor '" << cfg.id
+              << "', using raw passthrough.\n";
+    tmpl.encoding = "rgb8";
+    tmpl.step     = cfg.blob_layout.width * 3;
+  }
+
+  const uint32_t max_bytes = cfg.blob_layout.max_bytes;
+  if (max_bytes > 0) {
+    tmpl.data.resize(max_bytes);
+  }
+
+  return [pub, tmpl = std::move(tmpl)](
+      const uint8_t* data, uint32_t len, uint64_t ts_ns) mutable
+  {
+    auto msg         = tmpl;
+    msg.header.stamp = rclcpp::Time(static_cast<int64_t>(ts_ns));
+    msg.data.assign(data, data + len);
+    pub->publish(msg);
+  };
+}
+
 void register_all_sensor_factories() {
   using namespace beamng_msgs::msg;
   auto& reg = SensorFactoryRegistry::instance();
 
+  // Scalar factories — one entry per beamng_msgs message type.
   #define REGISTER(MsgType) \
     reg.register_factory(#MsgType, \
       [](rclcpp::Node& node, const std::string& topic, \
-          const ValueMap& values, const StringMap& svalues, \
-          const SensorConfig& cfg) -> PublishFn { \
-        return make_generic_factory<MsgType>(node, topic, values, svalues, cfg); \
+          const SensorConfig& cfg, \
+          uint32_t scalar_base_idx, uint32_t string_base_idx) -> ScalarRegisterResult { \
+        return make_generic_factory<MsgType>( \
+            node, topic, cfg, scalar_base_idx, string_base_idx); \
       })
 
   REGISTER(ElectricsSensor);
@@ -201,6 +316,19 @@ void register_all_sensor_factories() {
   REGISTER(TimeSensor);
 
   #undef REGISTER
+
+  // Blob factories.
+  reg.register_blob_factory("PointCloud2",
+    [](rclcpp::Node& node, const std::string& topic,
+        const SensorConfig& cfg) -> BlobPublishFn {
+      return make_pointcloud2_factory(node, topic, cfg);
+    });
+
+  reg.register_blob_factory("Image",
+    [](rclcpp::Node& node, const std::string& topic,
+        const SensorConfig& cfg) -> BlobPublishFn {
+      return make_image_factory(node, topic, cfg);
+    });
 }
 
 }  // namespace bng_ros2
