@@ -22,7 +22,7 @@ static void ros2_init() {
       DisableThreadLibraryCalls(hModule);
       ros2_init();
     } else if (reason == DLL_PROCESS_DETACH && lpReserved == nullptr) {
-      // lpReserved == nullptr means FreeLibrary was called (not process exit) — safe to shutdown.
+      // lpReserved == nullptr means FreeLibrary was called (not process exit)
       try { rclcpp::shutdown(); } catch (...) {}
     }
     return TRUE;

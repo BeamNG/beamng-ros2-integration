@@ -1,6 +1,5 @@
 #include "vehicle_node.h"
 #include "sensor_registry.h"
-#include "beamng_node.h"
 #include <geometry_msgs/msg/transform_stamped.hpp>
 #include <rclcpp/rclcpp.hpp>
 #include <tf2_geometry_msgs/tf2_geometry_msgs.hpp>
@@ -10,17 +9,6 @@
 #include "math_helpers.h"
 #include <iostream>
 #include <cstring>
-
-#if defined(_MSC_VER)
-#include <intrin.h>
-#define BNG_CPU_PAUSE() _mm_pause()
-#elif defined(__GNUC__) || defined(__clang__)
-#include <immintrin.h>
-#define BNG_CPU_PAUSE() __builtin_ia32_pause()
-#else
-#include <thread>
-#define BNG_CPU_PAUSE() std::this_thread::yield()
-#endif
 
 namespace bng_ros2 {
 
@@ -110,17 +98,20 @@ void VehicleNode::init_sensor_publishers() {
     string_buf_.slot[0].resize(string_cursor);
     string_buf_.slot[1].resize(string_cursor);
   }
+
+  // Pre-populate the cached TF message with the fixed string fields so they are never heap-allocated on the hot path.
+  tf_stamped_.header.frame_id = "world";
+  tf_stamped_.child_frame_id  = name_;
 }
 
 
 void VehicleNode::broadcast_tf(double pos[3], double rot[4]) {
-  geometry_msgs::msg::TransformStamped t;
-  t.header.stamp    = get_clock()->now();
-  t.header.frame_id = "world";
-  t.child_frame_id  = name_;
-  t.transform.translation = tf2::toMsg(to_vec3(pos));
-  t.transform.rotation    = tf2::toMsg(to_quat(rot));
-  tf_broadcaster_->sendTransform(t);
+  // Only the stamp, translation, and rotation change per call; the string fields
+  // were set once in init_sensor_publishers() and are reused from the cached message.
+  tf_stamped_.header.stamp        = get_clock()->now();
+  tf_stamped_.transform.translation = tf2::toMsg(to_vec3(pos));
+  tf_stamped_.transform.rotation    = tf2::toMsg(to_quat(rot));
+  tf_broadcaster_->sendTransform(tf_stamped_);
 }
 
 void VehicleNode::set_data(double scale[3], double color[4], double arrow_color[4]) {
@@ -163,14 +154,28 @@ void VehicleNode::push_frame(const double* values, uint32_t count) {
   scalar_buf_.commit();
 }
 
-void VehicleNode::set_sensor_field_string(const std::string& sensor_id,
-                                          const std::string& field_name,
-                                          const std::string& value) {
-  const std::string key = sensor_id + "::" + field_name;
+void VehicleNode::set_sensor_field_string(std::string_view sensor_id,
+                                            std::string_view field_name,
+                                            std::string_view value) {
+  // Construct the composite key on the stack, then build a std::string only if the lengths fit.
+  // MSVC 2019 (C++17) does not support heterogeneous unordered_map lookup, so a proper std::string key is required for find().
+  char key_buf[256];
+  const size_t id_len    = sensor_id.size();
+  const size_t field_len = field_name.size();
+  if (id_len + field_len + 2 > sizeof(key_buf)) return;
+
+  std::memcpy(key_buf, sensor_id.data(), id_len);
+  key_buf[id_len]     = ':';
+  key_buf[id_len + 1] = ':';
+  std::memcpy(key_buf + id_len + 2, field_name.data(), field_len);
+  // Construct the key string once from the stack buffer - single allocation.
+  const std::string key(key_buf, id_len + 2 + field_len);
   auto it = string_field_index_.find(key);
   if (it == string_field_index_.end()) return;
-  string_buf_.write_slot()[it->second] = value;
-  string_buf_.commit();
+
+  // Write into the current write slot. No commit here - string fields share the publish signal with the scalar frame.
+  // The publish thread reads string_buf_ whenever scalar_buf_ is dirty, so committing once in push_frame is sufficient.
+  string_buf_.write_slot()[it->second] = std::string(value);
 }
 
 uint32_t VehicleNode::register_blob_sensors(const char* const* sensor_ids,
@@ -191,20 +196,29 @@ uint32_t VehicleNode::register_blob_sensors(const char* const* sensor_ids,
   return registered;
 }
 
-void VehicleNode::push_blob_slot(uint32_t    slot_idx,
-                                  const uint8_t* data,
-                                  uint32_t       byte_len,
-                                  uint64_t       timestamp_ns) {
-  if (slot_idx >= blob_slots_.size()) return;
-  BlobSlot& slot = blob_slots_[slot_idx];
+void VehicleNode::push_blobs_batch(const BngBlobDesc* descs, uint32_t count) {
+  // Write all blob slots first, commit all at the end.
+  // This ensures the publish thread never wakes to a state where some slots have new data and
+  // others still hold stale data from the previous frame.
+  for (uint32_t i = 0; i < count; ++i) {
+    const BngBlobDesc& d = descs[i];
+    if (d.sensor_idx >= blob_slots_.size()) continue;
+    BlobSlot& slot = blob_slots_[d.sensor_idx];
 
-  std::vector<uint8_t>& ws = slot.buf.write_slot();
-  // Grow only if payload exceeds pre-allocated capacity (should not happen in normal use).
-  if (byte_len > ws.size()) ws.resize(byte_len);
-  std::memcpy(ws.data(), data, byte_len);
-  slot.timestamp_ns.store(timestamp_ns, std::memory_order_relaxed);
-  slot.actual_byte_len.store(byte_len, std::memory_order_relaxed);
-  slot.buf.commit();
+    std::vector<uint8_t>& ws = slot.buf.write_slot();
+    // Grow only if payload exceeds pre-allocated capacity (should not happen in normal use).
+    if (d.byte_len > ws.size()) ws.resize(d.byte_len);
+    std::memcpy(ws.data(), d.data, d.byte_len);
+    slot.timestamp_ns.store(d.timestamp_ns, std::memory_order_relaxed);
+    slot.actual_byte_len.store(d.byte_len, std::memory_order_relaxed);
+  }
+  // Commit all written slots after all memcpys are done.
+  for (uint32_t i = 0; i < count; ++i) {
+    const BngBlobDesc& d = descs[i];
+    if (d.sensor_idx < blob_slots_.size()) {
+      blob_slots_[d.sensor_idx].buf.commit();
+    }
+  }
 }
 
 void VehicleNode::start_publish_thread() {
@@ -216,26 +230,27 @@ void VehicleNode::start_publish_thread() {
 void VehicleNode::stop_publish_thread() {
   if (!running_.load()) return;
   running_.store(false);
+  // Wake the thread so it can observe running_=false and exit cleanly.
+  scalar_buf_.cv_.notify_all();
   if (publish_thread_.joinable()) publish_thread_.join();
 }
 
 void VehicleNode::publish_loop() {
+  // Rate limiter for the marker visualizer
+  auto last_marker_publish = std::chrono::steady_clock::now();
+  constexpr auto kMarkerInterval = std::chrono::milliseconds(100);
+
   while (running_.load(std::memory_order_relaxed)) {
 
-    bool has_scalar = scalar_buf_.dirty.load(std::memory_order_acquire);
-    bool has_blob   = false;
-    for (const auto& s : blob_slots_) {
-      if (s.buf.dirty.load(std::memory_order_acquire)) { has_blob = true; break; }
-    }
+    // Sleep until a scalar commit wakes us, or the timeout expires.
+    // The 1 ms timeout lets us still process blobs and markers when only blob sensors are active
+    // (blobs have their own dirty flags but share the same thread).
+    const bool has_scalar = scalar_buf_.wait_for_data(1);
 
-    if (!has_scalar && !has_blob) {
-      // _mm_pause() reduces power consumption and bus pressure without yielding to the OS.
-      BNG_CPU_PAUSE();
-      continue;
-    }
+    if (!running_.load(std::memory_order_relaxed)) break;
 
     if (has_scalar) {
-      scalar_buf_.dirty.store(false, std::memory_order_release);
+      scalar_buf_.clear_dirty();
       const ScalarStore& scalars = scalar_buf_.read_slot();
       const StringStore& strings = string_buf_.read_slot();
       for (auto& fn : publish_fns_) {
@@ -244,8 +259,8 @@ void VehicleNode::publish_loop() {
     }
 
     for (auto& slot : blob_slots_) {
-      if (!slot.buf.dirty.load(std::memory_order_acquire)) continue;
-      slot.buf.dirty.store(false, std::memory_order_release);
+      if (!slot.buf.is_dirty()) continue;
+      slot.buf.clear_dirty();
 
       const std::vector<uint8_t>& data = slot.buf.read_slot();
       const uint64_t ts  = slot.timestamp_ns.load(std::memory_order_relaxed);
@@ -255,46 +270,52 @@ void VehicleNode::publish_loop() {
       }
     }
 
-    // Rebuild marker geometry only when set_data() was called.
-    auto stamp = get_clock()->now();
-    if (marker_dirty_) {
-      marker_array_.markers.clear();
-      marker_array_.markers.reserve(2);
+    // Marker visualizer
+    const auto now = std::chrono::steady_clock::now();
+    if (now - last_marker_publish >= kMarkerInterval) {
+      last_marker_publish = now;
 
-      visualization_msgs::msg::Marker vehicle;
-      vehicle.header.frame_id  = name_;
-      vehicle.ns               = name_ + "_pos";
-      vehicle.id               = 0;
-      vehicle.type             = visualization_msgs::msg::Marker::CUBE;
-      vehicle.action           = visualization_msgs::msg::Marker::ADD;
-      vehicle.pose.orientation.w = 1.0;
-      vehicle.scale            = tf2::toMsg(data_.scale);
-      vehicle.color            = data_.color;
-      vehicle.lifetime.sec     = 5;
+      if (marker_dirty_) {
+        marker_array_.markers.clear();
+        marker_array_.markers.reserve(2);
 
-      visualization_msgs::msg::Marker arrow;
-      arrow.header.frame_id  = name_;
-      arrow.ns               = name_ + "_pos";
-      arrow.id               = 1;
-      arrow.type             = visualization_msgs::msg::Marker::ARROW;
-      arrow.action           = visualization_msgs::msg::Marker::ADD;
-      arrow.pose.orientation.w = 1.0;
-      arrow.pose.position.x += data_.scale[0] / 2;
-      arrow.scale            = tf2::toMsg(tf2::Vector3(2.0, 1.0, 1.0));
-      arrow.color            = data_.arrow_color;
-      arrow.lifetime.sec     = 5;
+        visualization_msgs::msg::Marker vehicle;
+        vehicle.header.frame_id  = name_;
+        vehicle.ns               = name_ + "_pos";
+        vehicle.id               = 0;
+        vehicle.type             = visualization_msgs::msg::Marker::CUBE;
+        vehicle.action           = visualization_msgs::msg::Marker::ADD;
+        vehicle.pose.orientation.w = 1.0;
+        vehicle.scale            = tf2::toMsg(data_.scale);
+        vehicle.color            = data_.color;
+        vehicle.lifetime.sec     = 5;
 
-      marker_array_.markers.emplace_back(std::move(vehicle));
-      marker_array_.markers.emplace_back(std::move(arrow));
-      marker_dirty_ = false;
+        visualization_msgs::msg::Marker arrow;
+        arrow.header.frame_id  = name_;
+        arrow.ns               = name_ + "_pos";
+        arrow.id               = 1;
+        arrow.type             = visualization_msgs::msg::Marker::ARROW;
+        arrow.action           = visualization_msgs::msg::Marker::ADD;
+        arrow.pose.orientation.w = 1.0;
+        arrow.pose.position.x += data_.scale[0] / 2;
+        arrow.scale            = tf2::toMsg(tf2::Vector3(2.0, 1.0, 1.0));
+        arrow.color            = data_.arrow_color;
+        arrow.lifetime.sec     = 5;
+
+        marker_array_.markers.emplace_back(std::move(vehicle));
+        marker_array_.markers.emplace_back(std::move(arrow));
+        marker_dirty_ = false;
+      }
+
+      if (!marker_array_.markers.empty()) {
+        const auto stamp = get_clock()->now();
+        marker_array_.markers[0].header.stamp = stamp;
+        marker_array_.markers[1].header.stamp = stamp;
+        visualizer_->publish(marker_array_);
+      }
     }
 
-    if (!marker_array_.markers.empty()) {
-      marker_array_.markers[0].header.stamp = stamp;
-      marker_array_.markers[1].header.stamp = stamp;
-      visualizer_->publish(marker_array_);
-    }
-
+    // ROS2 executor work (subscriptions, services, etc.)
     rclcpp::spin_some(std::static_pointer_cast<rclcpp::Node>(shared_from_this()));
   }
 }
@@ -343,6 +364,36 @@ BNG_ROS2_API void bngros2_destroy_all_vehicle_nodes() {
   } catch (std::exception& e) {
     std::cerr << "[ROS2 ERROR] " << e.what() << "\n";
   }
+}
+
+// Returns a raw (non-owning) pointer to the VehicleNode for the given vehicle id.
+// The Lua side caches this once after init to avoid a map lookup on every hot-path call.
+// The pointer remains valid for the lifetime of the node (until bngros2_destroy_vehicle_node).
+BNG_ROS2_API void* bngros2_get_vehicle_handle(uint32_t id) {
+  auto it = nodes.find(id);
+  return (it != nodes.end()) ? it->second.get() : nullptr;
+}
+
+BNG_ROS2_API void bngros2_handle_broadcast_tf(void* handle, double pos[3], double rot[4]) {
+  static_cast<bng_ros2::VehicleNode*>(handle)->broadcast_tf(pos, rot);
+}
+
+BNG_ROS2_API void bngros2_handle_push_frame(void* handle, const double* values, uint32_t count) {
+  static_cast<bng_ros2::VehicleNode*>(handle)->push_frame(values, count);
+}
+
+BNG_ROS2_API void bngros2_handle_push_blobs_batch(void* handle,
+                                                    const BngBlobDesc* descs,
+                                                    uint32_t count) {
+  static_cast<bng_ros2::VehicleNode*>(handle)->push_blobs_batch(descs, count);
+}
+
+BNG_ROS2_API void bngros2_handle_set_sensor_field_string(void* handle,
+                                                          const char* sensor_id,
+                                                          const char* field_name,
+                                                          const char* value) {
+  static_cast<bng_ros2::VehicleNode*>(handle)->set_sensor_field_string(
+      sensor_id, field_name, value ? value : "");
 }
 
 BNG_ROS2_API void bngros2_broadcast_tf(uint32_t id, double pos[3], double rot[4]) {
@@ -421,10 +472,7 @@ BNG_ROS2_API void bngros2_push_blobs_batch(uint32_t vehicle_id,
   auto it = nodes.find(vehicle_id);
   if (it == nodes.end()) return;
   try {
-    for (uint32_t i = 0; i < count; ++i) {
-      const BngBlobDesc& d = descs[i];
-      it->second->push_blob_slot(d.sensor_idx, d.data, d.byte_len, d.timestamp_ns);
-    }
+    it->second->push_blobs_batch(descs, count);
   } catch (std::exception& e) {
     std::cerr << "[ROS2 ERROR] bngros2_push_blobs_batch: " << e.what() << "\n";
   }

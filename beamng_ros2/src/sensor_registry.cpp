@@ -63,7 +63,7 @@ bool SensorRegistry::load(const std::string& json_str) {
       if (cfg.data_mode == DataMode::Blob) {
         if (!s.contains("blobLayout")) {
           std::cerr << "[ROS2 WARN] SensorRegistry: blob sensor '" << cfg.id
-                    << "' has no 'blobLayout' — buffer will not be pre-allocated.\n";
+                    << "' has no 'blobLayout' - buffer will not be pre-allocated.\n";
         } else {
           const auto& bl = s["blobLayout"];
           cfg.blob_layout.format       = bl.value("format",      "");

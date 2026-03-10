@@ -9,7 +9,7 @@
 
 namespace bng_ros2 {
 
-// Flat value stores — one instance per VehicleNode, allocated once at init.
+// Flat value stores - one instance per VehicleNode, allocated once at init.
 // Indexed by integer position, so publish-time access is a direct array read with no string hashing.
 using ScalarStore = std::vector<double>;
 using StringStore = std::vector<std::string>;

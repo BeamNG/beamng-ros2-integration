@@ -235,13 +235,16 @@ static BlobPublishFn make_pointcloud2_factory(
     tmpl.data.resize(max_bytes);
   }
 
-  return [pub, tmpl = std::move(tmpl), stride](
+  // Capture msg (not tmpl) directly so the lambda reuses the same allocation every call.
+  // Only the per-frame mutable fields (stamp, width, row_step, data) are updated;
+  // the fixed fields (frame_id, height, is_bigendian, is_dense, point_step, fields) are set once here and never touched again.
+  return [pub, msg = std::move(tmpl), stride](
       const uint8_t* data, uint32_t len, uint64_t ts_ns) mutable
   {
-    auto msg         = tmpl;
     msg.header.stamp = rclcpp::Time(static_cast<int64_t>(ts_ns));
     msg.width        = (stride > 0) ? (len / stride) : 0;
     msg.row_step     = len;
+    // assign() writes exactly len bytes into the pre-sized buffer - no reallocation.
     msg.data.assign(data, data + len);
     pub->publish(msg);
   };
@@ -285,10 +288,11 @@ static BlobPublishFn make_image_factory(
     tmpl.data.resize(max_bytes);
   }
 
-  return [pub, tmpl = std::move(tmpl)](
+  // Capture msg directly so the lambda reuses the same allocation every call.
+  // Only stamp and data change per frame; all other fields are fixed at init.
+  return [pub, msg = std::move(tmpl)](
       const uint8_t* data, uint32_t len, uint64_t ts_ns) mutable
   {
-    auto msg         = tmpl;
     msg.header.stamp = rclcpp::Time(static_cast<int64_t>(ts_ns));
     msg.data.assign(data, data + len);
     pub->publish(msg);
@@ -299,7 +303,7 @@ void register_all_sensor_factories() {
   using namespace beamng_msgs::msg;
   auto& reg = SensorFactoryRegistry::instance();
 
-  // Scalar factories — one entry per beamng_msgs message type.
+  // Scalar factories - one entry per beamng_msgs message type.
   #define REGISTER(MsgType) \
     reg.register_factory(#MsgType, \
       [](rclcpp::Node& node, const std::string& topic, \

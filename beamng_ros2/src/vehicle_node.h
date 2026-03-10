@@ -4,18 +4,21 @@
 #include <functional>
 #include <memory>
 #include <string>
+#include <string_view>
 #include <thread>
 #include <unordered_map>
 #include <vector>
 #include <tf2/LinearMath/Vector3.h>
 #include <tf2_ros/transform_broadcaster.h>
 #include <geometry_msgs/msg/point.hpp>
+#include <geometry_msgs/msg/transform_stamped.hpp>
 #include <rclcpp/rclcpp.hpp>
 #include <std_msgs/msg/color_rgba.hpp>
 #include <visualization_msgs/msg/marker_array.hpp>
 #include "definitions.h"
 #include "sensor_factories.h"
 #include "spsc_double_buffer.h"
+#include "beamng_node.h"
 
 namespace bng_ros2 {
 
@@ -46,7 +49,7 @@ struct BlobSlot {
     if (this != &o) {
       buf        = std::move(o.buf);
       timestamp_ns.store(o.timestamp_ns.load(std::memory_order_relaxed),
-                         std::memory_order_relaxed);
+                          std::memory_order_relaxed);
       actual_byte_len.store(o.actual_byte_len.load(std::memory_order_relaxed),
                             std::memory_order_relaxed);
       publish_fn = std::move(o.publish_fn);
@@ -66,37 +69,36 @@ class VehicleNode : public rclcpp::Node {
     void broadcast_tf(double pos[3], double rot[4]);
     void set_data(double scale[3], double color[4], double arrow_color[4]);
 
-    // Scalar path — registers the ordered mapping between Lua frame buffer positions
+    // Scalar path - registers the ordered mapping between Lua frame buffer positions
     // and their destination indices in the flat ScalarStore. Called once after construction.
     // Returns the number of slots registered.
     uint32_t register_frame_layout(const char* const* sensor_ids,
                                     const char* const* field_names,
                                     uint32_t count);
 
-    // Scalar hot path — scatters values into the write slot, then commits.
+    // Scalar hot path - scatters values into the write slot, then commits.
     void push_frame(const double* values, uint32_t count);
 
-    // String fields — low-frequency, not on the hot path.
-    void set_sensor_field_string(const std::string& sensor_id,
-                                  const std::string& field_name,
-                                  const std::string& value);
+    // String fields - low-frequency, not on the hot path.
+    void set_sensor_field_string(std::string_view sensor_id,
+                                  std::string_view field_name,
+                                  std::string_view value);
 
-    // Blob path — validates that each sensor id is known and returns the count of valid ones.
+    // Blob path - validates that each sensor id is known and returns the count of valid ones.
     // Called once after sensor creation in GE Lua.
     uint32_t register_blob_sensors(const char* const* sensor_ids, uint32_t count);
 
-    // Blob hot path — copies data into the write slot and commits.
-    void push_blob_slot(uint32_t slot_idx,
-                        const uint8_t* data,
-                        uint32_t       byte_len,
-                        uint64_t       timestamp_ns);
+    // Blob hot path - copies all descriptors into write slots and commits them all at once.
+    // Batching the commits prevents the publish thread from seeing a partial blob update.
+    void push_blobs_batch(const BngBlobDesc* descs, uint32_t count);
 
     // Called from the C API init/destroy functions.
     void start_publish_thread();
     void stop_publish_thread();
 
     // Must be called once after make_shared (not from the constructor) because
-    // scalar factories capture shared_from_this(), which requires the object to already be managed by a shared_ptr.
+    // scalar factories capture shared_from_this(), which requires the object to
+    // already be managed by a shared_ptr.
     void init_sensor_publishers();
 
   private:
@@ -106,6 +108,11 @@ class VehicleNode : public rclcpp::Node {
     VehicleData  data_;
     std::unique_ptr<tf2_ros::TransformBroadcaster> tf_broadcaster_;
     rclcpp::Publisher<visualization_msgs::msg::MarkerArray>::SharedPtr visualizer_;
+
+    // Cached TF message - fixed string fields set once at init, mutable fields
+    // (stamp, translation, rotation) updated per call. Avoids string heap allocation
+    // on the 2000 Hz physics hot path.
+    geometry_msgs::msg::TransformStamped tf_stamped_;
 
     // Scalar path
     SpscDoubleBuffer<ScalarStore> scalar_buf_;
@@ -132,14 +139,22 @@ class VehicleNode : public rclcpp::Node {
 
 }  // namespace bng_ros2
 
-// BngBlobDesc is defined in beamng_node.h (C-compatible, outside any namespace)
-// so it can be shared between vehicle_node.cpp and Lua ffi.cdef.
-#include "beamng_node.h"
-
 extern "C" {
 BNG_ROS2_API char     bngros2_init_vehicle_node(uint32_t id, const char* name);
 BNG_ROS2_API void     bngros2_destroy_vehicle_node(uint32_t id);
 BNG_ROS2_API void     bngros2_destroy_all_vehicle_nodes();
+
+// Returns an opaque handle to the VehicleNode for the given id, or nullptr.
+// Cache this handle on the Lua side to avoid a hash-map lookup on every hot-path call.
+BNG_ROS2_API void*    bngros2_get_vehicle_handle(uint32_t id);
+
+// Handle-based hot-path functions - bypass the global nodes map entirely.
+BNG_ROS2_API void     bngros2_handle_broadcast_tf(void* handle, double pos[3], double rot[4]);
+BNG_ROS2_API void     bngros2_handle_push_frame(void* handle, const double* values, uint32_t count);
+BNG_ROS2_API void     bngros2_handle_push_blobs_batch(void* handle, const BngBlobDesc* descs, uint32_t count);
+BNG_ROS2_API void     bngros2_handle_set_sensor_field_string(void* handle, const char* sensor_id, const char* field_name, const char* value);
+
+// Id-based setup functions - called once, map lookup cost is acceptable.
 BNG_ROS2_API void     bngros2_broadcast_tf(uint32_t id, double pos[3], double rot[4]);
 BNG_ROS2_API void     bngros2_vehicle_set_data(uint32_t id, double scale[3], double color[4], double arrow_color[4]);
 BNG_ROS2_API uint32_t bngros2_register_sensor_fields(uint32_t id, const char* const* sensor_ids, const char* const* field_names, uint32_t count);
