@@ -9,8 +9,8 @@ def generate_launch_description():
     return LaunchDescription([
         DeclareLaunchArgument(
             'host',
-            default_value='172.21.192.1',
-            description='BeamNG.tech host IP address'
+            default_value='127.0.0.1',
+            description='BeamNG.tech host IP. Override for your setup (WSL=vEthernet IP, remote=BeamNG machine IP)'
         ),
         DeclareLaunchArgument(
             'port',
@@ -34,6 +34,3 @@ def generate_launch_description():
             output='screen',
         ),
     ])
-
-
-

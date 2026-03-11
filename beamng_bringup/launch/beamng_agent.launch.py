@@ -9,7 +9,7 @@ def generate_launch_description():
             name='beamng_agent',
             output='screen',
             parameters=[
-                {'host': '172.21.192.1'},
+                {'host': '127.0.0.1'},
                 {'port': 25252},
                 {'driving_mode': 'keyboard'},
                 {'vehicle_id': 'ego'},

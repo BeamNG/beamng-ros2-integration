@@ -1,6 +1,7 @@
 #!/usr/bin/env python3
 
 import sys
+import time
 import rclpy
 from rclpy.node import Node
 from beamng_msgs.msg import DroneControl
@@ -18,7 +19,7 @@ class DroneControllerNode(Node):
         super().__init__(NODE_NAME)
 
         # Declare parameters
-        host = self.declare_parameter("host", "172.21.192.1").value
+        host = self.declare_parameter("host", "127.0.0.1").value
         port = self.declare_parameter("port", 25252).value
         vehicle_id = self.declare_parameter("vehicle_id", "drone").value
 
@@ -38,13 +39,47 @@ class DroneControllerNode(Node):
             )
             sys.exit(1)
 
-        # Get vehicle
-        current_vehicles = self.game_client.get_current_vehicles()
-
-        assert (
-            vehicle_id in current_vehicles.keys()
-        ), f"no vehicle with id {vehicle_id} exists"
-        self.vehicle_client = current_vehicles[vehicle_id]
+        # Get vehicle - wait indefinitely (level may still be loading or scenario not started)
+        current_vehicles = {}
+        attempt = 0
+        while True:
+            current_vehicles = self.game_client.get_current_vehicles()
+            if current_vehicles:
+                break
+            attempt += 1
+            if attempt == 1 or attempt % 5 == 0:
+                self.get_logger().info(
+                    f"Waiting for vehicles... (attempt {attempt})"
+                )
+            time.sleep(2)
+        # Try by key first, then by vid (BeamNG.drive may use different IDs)
+        self.vehicle_client = None
+        if vehicle_id in current_vehicles.keys():
+            self.vehicle_client = current_vehicles[vehicle_id]
+        else:
+            # Fallback: match by vehicle vid (e.g. when launched with -vehicle drone)
+            for vid, vehicle in current_vehicles.items():
+                if hasattr(vehicle, 'vid') and vehicle.vid == vehicle_id:
+                    self.vehicle_client = vehicle
+                    self.get_logger().info(
+                        f"Found vehicle by vid: '{vehicle_id}' (key was '{vid}')"
+                    )
+                    break
+            if self.vehicle_client is None:
+                # Fallback: use player vehicle when only one exists
+                if len(current_vehicles) == 1:
+                    self.vehicle_client = next(iter(current_vehicles.values()))
+                    self.get_logger().info(
+                        f"Using sole vehicle '{self.vehicle_client.vid}' "
+                        f"(requested '{vehicle_id}' not in keys: {list(current_vehicles.keys())})"
+                    )
+        if self.vehicle_client is None:
+            self.get_logger().error(
+                f"No vehicle with id '{vehicle_id}' found. "
+                f"Available: {list(current_vehicles.keys())} "
+                f"(vids: {[getattr(v, 'vid', '?') for v in current_vehicles.values()]})"
+            )
+            sys.exit(1)
         try:
             self.vehicle_client.connect(self.game_client)
             vid = self.vehicle_client.vid
@@ -83,8 +118,8 @@ class DroneControllerNode(Node):
             "IMPORTANT: Press 't' in the teleop to toggle takeoff/land before the drone can move!"
         )
         
-        # Verify droneInput controller exists after a short delay
-        self.create_timer(2.0, self.verify_drone_controller)
+        # Verify droneInput controller exists once after a short delay
+        self._verify_timer = self.create_timer(2.0, self._verify_drone_controller_once)
         
         # Message counter for debugging
         self.message_count = 0
@@ -95,39 +130,33 @@ class DroneControllerNode(Node):
         try:
             self.message_count += 1
             
-            # Log toggle messages for debugging
+            # Log toggle messages at debug level
             if msg.takeoff_land or msg.toggle_mode:
                 self.toggle_received_count += 1
-                self.get_logger().info(
-                    f"[MSG #{self.message_count}] Received control msg: takeoff_land={msg.takeoff_land}, "
-                    f"toggle_mode={msg.toggle_mode}, last_takeoff={self.last_takeoff_land}, "
-                    f"last_mode={self.last_toggle_mode} (Total toggles received: {self.toggle_received_count})"
+                self.get_logger().debug(
+                    f"[MSG #{self.message_count}] takeoff_land={msg.takeoff_land}, "
+                    f"toggle_mode={msg.toggle_mode} (total toggles: {self.toggle_received_count})"
                 )
             
             # Handle toggle commands (only trigger when going from False to True - edge-triggered)
             if msg.takeoff_land and not self.last_takeoff_land:
-                # Only trigger when transitioning from False to True
-                self.get_logger().info(f"*** TRIGGERING TAKEOFF/LAND TOGGLE ***")
-                self.get_logger().info(f"Received takeoff_land toggle: {msg.takeoff_land} (was: {self.last_takeoff_land})")
+                self.get_logger().info("Triggering takeoff/land toggle")
                 self._toggle_takeoff_land()
             self.last_takeoff_land = msg.takeoff_land
 
             if msg.toggle_mode and not self.last_toggle_mode:
-                # Only trigger when transitioning from False to True
-                self.get_logger().info(f"*** TRIGGERING FLIGHT MODE TOGGLE ***")
-                self.get_logger().info(f"Received toggle_mode: {msg.toggle_mode} (was: {self.last_toggle_mode})")
+                self.get_logger().info("Triggering flight mode toggle")
                 self._toggle_flight_mode()
             self.last_toggle_mode = msg.toggle_mode
 
             # Store the latest control message (will be sent by timer)
             self.latest_control_msg = msg
             
-            # Periodic status (every 100 messages)
-            if self.message_count % 100 == 0:
-                self.get_logger().info(
-                    f"Status: Processed {self.message_count} messages, "
-                    f"received {self.toggle_received_count} toggle commands, "
-                    f"flight_active={self.flight_active}"
+            # Periodic status at debug level (every 500 messages)
+            if self.message_count % 500 == 0:
+                self.get_logger().debug(
+                    f"Status: {self.message_count} msgs, "
+                    f"{self.toggle_received_count} toggles, flight_active={self.flight_active}"
                 )
 
         except Exception as e:
@@ -135,22 +164,14 @@ class DroneControllerNode(Node):
             import traceback
             self.get_logger().error(traceback.format_exc())
     
-    def verify_drone_controller(self):
-        """Verify that the droneInput controller exists and list available controllers."""
+    def _verify_drone_controller_once(self):
+        """Verify droneInput controller exists (runs once at startup)."""
+        self._verify_timer.cancel()
         try:
-            # List all available controllers
-            list_cmd = "local controllers = controller.getControllers(); local names = {}; for k,v in pairs(controllers) do table.insert(names, k) end; return table.concat(names, ', ')"
-            self.get_logger().info("Checking available controllers on drone...")
-            
-            # Try to get controller info
-            info_cmd = "log('I', 'DRONE_CTRL', 'Available controllers check')"
-            self.vehicle_client.queue_lua_command(info_cmd)
-            
-            # Check if droneInput exists
             check_cmd = "local ctrl = controller.getControllerSafe('droneInput'); if ctrl then log('I', 'DRONE_CTRL', 'droneInput controller FOUND') else log('E', 'DRONE_CTRL', 'droneInput controller NOT FOUND') end"
             self.vehicle_client.queue_lua_command(check_cmd)
             self.vehicle_client.poll_sensors()
-            self.get_logger().info("Controller verification commands sent - check BeamNG console for results")
+            self.get_logger().info("Drone ready. Run 'ros2 run beamng_teleop_keyboard drone_teleop' in another terminal to control.")
         except Exception as e:
             self.get_logger().warn(f"Could not verify droneInput controller: {e}")
             self.get_logger().warn("The drone may not have the droneInput controller loaded!")
@@ -163,8 +184,7 @@ class DroneControllerNode(Node):
     def _toggle_takeoff_land(self):
         """Toggle takeoff/land state."""
         try:
-            self.get_logger().info(f"=== TOGGLE TAKEOFF/LAND ===")
-            self.get_logger().info(f"Vehicle ID: {self.vehicle_client.vid}")
+            self.get_logger().info(f"Toggle takeoff/land (vehicle: {self.vehicle_client.vid})")
             
             # Try multiple Lua command formats
             commands_to_try = [
@@ -176,21 +196,21 @@ class DroneControllerNode(Node):
             command_executed = False
             for i, lua_command in enumerate(commands_to_try):
                 try:
-                    self.get_logger().info(f"Trying command format {i+1}: {lua_command}")
+                    self.get_logger().debug(f"Trying command format {i+1}: {lua_command}")
                     self.vehicle_client.queue_lua_command(lua_command)
-                    self.get_logger().info("Lua command queued successfully")
+                    self.get_logger().debug("Lua command queued successfully")
                     
                     # Execute immediately to ensure the command is processed
                     try:
                         self.vehicle_client.poll_sensors()
-                        self.get_logger().info("Polled sensors to execute command")
+                        self.get_logger().debug("Polled sensors to execute command")
                         command_executed = True
                         break
                     except Exception as e1:
                         self.get_logger().warn(f"poll_sensors failed: {e1}, trying step()")
                         try:
                             self.vehicle_client.step(1)
-                            self.get_logger().info("Stepped simulation to execute command")
+                            self.get_logger().debug("Stepped simulation to execute command")
                             command_executed = True
                             break
                         except Exception as e2:
@@ -208,7 +228,6 @@ class DroneControllerNode(Node):
             self.get_logger().info(
                 f"Takeoff/Land toggled. Flight active: {self.flight_active}"
             )
-            self.get_logger().info("=== TOGGLE COMPLETE ===")
         except Exception as e:
             self.get_logger().error(f"Error toggling takeoff/land: {str(e)}")
             import traceback
@@ -278,12 +297,7 @@ class DroneControllerNode(Node):
                 except Exception:
                     pass  # Ignore errors if methods aren't available
 
-            # Debug logging (only log when there's actual input to reduce spam)
-            if msg.ascend > 0.0 or msg.descend > 0.0 or abs(msg.pitch) > 0.001 or abs(msg.roll) > 0.001 or abs(msg.yaw) > 0.001:
-                self.get_logger().info(
-                    f"Sending drone inputs: ascend={msg.ascend:.2f}, descend={msg.descend:.2f}, "
-                    f"pitch={msg.pitch:.2f}, roll={msg.roll:.2f}, yaw={msg.yaw:.2f}"
-                )
+            # Logging disabled - was flooding terminal at ~20 Hz
 
         except Exception as e:
             self.get_logger().error(f"Error sending drone inputs: {str(e)}")
@@ -316,4 +330,3 @@ def main(args=None):
 
 if __name__ == "__main__":
     main()
-

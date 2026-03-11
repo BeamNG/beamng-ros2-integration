@@ -18,7 +18,7 @@ class VehicleControlNode(Node):
     def __init__(self):
         super().__init__(NODE_NAME)
 
-        host = self.declare_parameter("host", "172.21.192.1").value
+        host = self.declare_parameter("host", "127.0.0.1").value
         port = self.declare_parameter("port", 25252).value
         self.driving_mode = self.declare_parameter("driving_mode", "keyboard").value
         vehicle_id = self.declare_parameter("vehicle_id", "ego").value
@@ -162,11 +162,25 @@ class TwistToBNG:
         self.node = node
         self.vehicle_type = vehicle_type.lower()
         self.BNG_pub = node.create_publisher(VehicleControl, "/control", 10)
+
+        cmd_vel_topic = node.declare_parameter("cmd_vel_topic", "/cmd_vel").value
+        cmd_vel_stamped_topic = node.declare_parameter(
+            "cmd_vel_stamped_topic", "/cmd_vel_stamped"
+        ).value
+
         self.cmd_vel_sub = node.create_subscription(
-            Twist, "/cmd_vel", self.cmd_vel_callback, 10
+            Twist, cmd_vel_topic, self.cmd_vel_callback, 10
+        )
+        self.cmd_vel_stamped_sub = node.create_subscription(
+            TwistStamped, cmd_vel_stamped_topic, self._cmd_vel_stamped_callback, 10
         )
         self.brake_sub = node.create_subscription(
             String, "/brake", self.brake_callback, 10
+        )
+
+        node.get_logger().info(
+            f"TwistToBNG subscribing to {cmd_vel_topic} (Twist) and "
+            f"{cmd_vel_stamped_topic} (TwistStamped)"
         )
 
         self.timer = node.create_timer(0.1, self.main_loop)
@@ -196,6 +210,10 @@ class TwistToBNG:
 
     def brake_callback(self, brake_state):
         self.brake_state = brake_state.data
+
+    def _cmd_vel_stamped_callback(self, msg):
+        """Handle TwistStamped: forward twist to cmd_vel_callback."""
+        self.cmd_vel_callback(msg.twist)
 
     def cmd_vel_callback(self, cmd_vel):
         # For backward compatibility: ground vehicles only use linear.x and angular.z

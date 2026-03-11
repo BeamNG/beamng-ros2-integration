@@ -10,4 +10,3 @@ float64 yaw_left        # Yaw left input [0.0, 1.0]
 float64 yaw_right       # Yaw right input [0.0, 1.0]
 bool takeoff_land       # Toggle takeoff/land (true = takeoff, false = land)
 bool toggle_mode        # Toggle flight mode (true = switch mode)
-
