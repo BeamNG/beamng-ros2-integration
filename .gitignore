@@ -172,3 +172,6 @@ build/
 install/
 log/
 compile.bat
+init_env_wsl.sh
+init_env.ps1
+config/cyclonedds.xml
