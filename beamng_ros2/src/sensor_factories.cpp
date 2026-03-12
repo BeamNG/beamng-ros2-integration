@@ -201,6 +201,118 @@ static ScalarRegisterResult make_generic_factory(
   return {std::move(fn), scalar_local_idx, string_local_idx};
 }
 
+// Reads a uint16 from a byte buffer at *pos and advances *pos.
+static inline uint16_t read_u16(const uint8_t* data, uint32_t* pos) {
+  uint16_t v;
+  std::memcpy(&v, data + *pos, sizeof(v));
+  *pos += sizeof(v);
+  return v;
+}
+
+// Reads a uint32 from a byte buffer at *pos and advances *pos.
+static inline uint32_t read_u32(const uint8_t* data, uint32_t* pos) {
+  uint32_t v;
+  std::memcpy(&v, data + *pos, sizeof(v));
+  *pos += sizeof(v);
+  return v;
+}
+
+// Reads a float64 from a byte buffer at *pos and advances *pos.
+static inline double read_f64(const uint8_t* data, uint32_t* pos) {
+  double v;
+  std::memcpy(&v, data + *pos, sizeof(v));
+  *pos += sizeof(v);
+  return v;
+}
+
+// Reads a length-prefixed string (uint16 len + bytes) at *pos and advances *pos.
+static inline std::string read_str(const uint8_t* data, uint32_t* pos) {
+  const uint16_t len = read_u16(data, pos);
+  std::string s(reinterpret_cast<const char*>(data + *pos), len);
+  *pos += len;
+  return s;
+}
+
+// Decode one length-prefixed parallel array section from the blob into a message.
+// Reads [uint32 count] then calls each field_reader count times in order.
+template<typename MsgT>
+static void decode_section(
+    MsgT& msg,
+    const std::vector<std::function<void(MsgT&, const uint8_t*, uint32_t*)>>& field_readers,
+    const uint8_t* data,
+    uint32_t len,
+    uint32_t* pos)
+{
+  if (*pos + sizeof(uint32_t) > len) return;
+  const uint32_t count = read_u32(data, pos);
+  for (uint32_t i = 0; i < count; ++i) {
+    for (const auto& reader : field_readers) {
+      if (*pos >= len) return;
+      reader(msg, data, pos);
+    }
+  }
+}
+
+// Generic factory for messages with variable-length parallel array fields.
+// section_readers: one entry per array section; each entry is a list of per-field reader functions.
+// Wire format per section: [uint32 count] then count entries, each field in order:
+//   string  → [uint16 len][bytes]
+//   float64 → [float64]
+template<typename MsgT>
+static BlobPublishFn make_dynamic_array_factory(
+    rclcpp::Node& node,
+    const std::string& topic,
+    const SensorConfig& cfg,
+    std::vector<std::vector<std::function<void(MsgT&, const uint8_t*, uint32_t*)>>> section_readers)
+{
+  auto pub      = node.create_publisher<MsgT>(topic, 10);
+  auto node_ptr = node.shared_from_this();
+  const std::string frame_id = cfg.frame_id.empty() ? std::string(node.get_name()) : cfg.frame_id;
+
+  return [pub, node_ptr, frame_id,
+          readers = std::move(section_readers)](
+      const uint8_t* data, uint32_t len, uint64_t ts_ns) mutable
+  {
+    MsgT msg;
+    if constexpr (has_header<MsgT>::value) {
+      msg.header.stamp    = rclcpp::Time(static_cast<int64_t>(ts_ns));
+      msg.header.frame_id = frame_id;
+    }
+    uint32_t pos = 0;
+    for (const auto& section_readers_i : readers) {
+      decode_section(msg, section_readers_i, data, len, &pos);
+    }
+    pub->publish(msg);
+  };
+}
+
+static BlobPublishFn make_dynamic_array_sensor_factory(
+    rclcpp::Node& node,
+    const std::string& topic,
+    const SensorConfig& cfg)
+{
+  using beamng_msgs::msg::DamageSensor;
+  using Msg = DamageSensor;
+  using FieldFn = std::function<void(Msg&, const uint8_t*, uint32_t*)>;
+
+  std::vector<std::vector<FieldFn>> readers = {
+    {
+      [](Msg& m, const uint8_t* d, uint32_t* p) { m.deformgroup_id.push_back(read_str(d, p)); },
+      [](Msg& m, const uint8_t* d, uint32_t* p) { m.inv_max_events.push_back(read_f64(d, p)); },
+      [](Msg& m, const uint8_t* d, uint32_t* p) { m.damage.push_back(read_f64(d, p)); },
+      [](Msg& m, const uint8_t* d, uint32_t* p) { m.event_count.push_back(read_f64(d, p)); },
+      [](Msg& m, const uint8_t* d, uint32_t* p) { m.max_events.push_back(read_f64(d, p)); },
+    },
+    {
+      [](Msg& m, const uint8_t* d, uint32_t* p) { m.part_id.push_back(read_str(d, p)); },
+      [](Msg& m, const uint8_t* d, uint32_t* p) { m.name.push_back(read_str(d, p)); },
+      [](Msg& m, const uint8_t* d, uint32_t* p) { m.part_damage.push_back(read_f64(d, p)); },
+    },
+  };
+
+  return make_dynamic_array_factory<Msg>(node, topic, cfg, std::move(readers));
+}
+
 static BlobPublishFn make_pointcloud2_factory(
     rclcpp::Node& node,
     const std::string& topic,
@@ -316,12 +428,16 @@ void register_all_sensor_factories() {
   REGISTER(ElectricsSensor);
   REGISTER(GForceSensor);
   REGISTER(StateSensor);
-  REGISTER(DamageSensor);
   REGISTER(TimeSensor);
 
   #undef REGISTER
 
-  // Blob factories.
+  reg.register_blob_factory("DamageSensor",
+    [](rclcpp::Node& node, const std::string& topic,
+        const SensorConfig& cfg) -> BlobPublishFn {
+      return make_dynamic_array_sensor_factory(node, topic, cfg);
+    });
+
   reg.register_blob_factory("PointCloud2",
     [](rclcpp::Node& node, const std::string& topic,
         const SensorConfig& cfg) -> BlobPublishFn {
