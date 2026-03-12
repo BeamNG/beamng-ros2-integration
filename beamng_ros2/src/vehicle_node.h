@@ -10,7 +10,6 @@
 #include <vector>
 #include <tf2/LinearMath/Vector3.h>
 #include <tf2_ros/transform_broadcaster.h>
-#include <geometry_msgs/msg/point.hpp>
 #include <geometry_msgs/msg/transform_stamped.hpp>
 #include <rclcpp/rclcpp.hpp>
 #include <std_msgs/msg/color_rgba.hpp>
@@ -24,7 +23,6 @@ namespace bng_ros2 {
 
 struct VehicleData {
   tf2::Vector3 scale;
-  geometry_msgs::msg::Point offset;
   std_msgs::msg::ColorRGBA color;
   std_msgs::msg::ColorRGBA arrow_color;
 };
@@ -131,6 +129,14 @@ class VehicleNode : public rclcpp::Node {
     // Marker visualizer
     visualization_msgs::msg::MarkerArray marker_array_;
     bool marker_dirty_{true};
+
+    // Shared blob-dirty notification: publish_loop waits on this cv when no scalar data is pending, so blob commits wake the thread immediately.
+    std::mutex              blob_cv_mutex_;
+    std::condition_variable blob_cv_;
+    std::atomic<bool>       blob_dirty_{false};
+
+    // Cached node shared_ptr for spin_some - avoids atomic refcount on hot path.
+    std::shared_ptr<rclcpp::Node> self_ptr_;
 
     // Publish thread
     std::thread       publish_thread_;

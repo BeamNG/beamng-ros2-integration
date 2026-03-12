@@ -93,11 +93,6 @@ struct SpscDoubleBuffer {
   const T& read_slot() const {
     return slot[(state_.load(std::memory_order_acquire) & 1u) ^ 1u];
   }
-
-  // Mutable variant for cases where the reader needs to move-assign data out.
-  T& read_slot_mut() {
-    return slot[(state_.load(std::memory_order_acquire) & 1u) ^ 1u];
-  }
 };
 
 }  // namespace bng_ros2

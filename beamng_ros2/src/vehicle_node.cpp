@@ -99,6 +99,10 @@ void VehicleNode::init_sensor_publishers() {
     string_buf_.slot[1].resize(string_cursor);
   }
 
+  // Cache a shared_ptr to self for use in the publish loop (spin_some).
+  // Must be assigned after init_sensor_publishers since shared_from_this() requires the object to already be managed by a shared_ptr at that point.
+  self_ptr_ = shared_from_this();
+
   // Pre-populate the cached TF message with the fixed string fields so they are never heap-allocated on the hot path.
   tf_stamped_.header.frame_id = "world";
   tf_stamped_.child_frame_id  = name_;
@@ -106,8 +110,7 @@ void VehicleNode::init_sensor_publishers() {
 
 
 void VehicleNode::broadcast_tf(double pos[3], double rot[4]) {
-  // Only the stamp, translation, and rotation change per call; the string fields
-  // were set once in init_sensor_publishers() and are reused from the cached message.
+  // Only the stamp, translation, and rotation change per call; the string fields were set once in init_sensor_publishers() and are reused from the cached message.
   tf_stamped_.header.stamp        = get_clock()->now();
   tf_stamped_.transform.translation = tf2::toMsg(to_vec3(pos));
   tf_stamped_.transform.rotation    = tf2::toMsg(to_quat(rot));
@@ -124,19 +127,15 @@ void VehicleNode::set_data(double scale[3], double color[4], double arrow_color[
 uint32_t VehicleNode::register_frame_layout(const char* const* sensor_ids,
                                               const char* const* field_names,
                                               uint32_t count) {
+  (void)sensor_ids;
+  (void)field_names;
+
   frame_layout_.clear();
   frame_layout_.reserve(count);
-
-  // Assign sequential indices
-  // The publish-time closures in publish_fns_ already captured their base indices, so we just record the position mapping here.
-  // sensor_ids and field_names are not needed at this stage but are part of the API.
   for (uint32_t i = 0; i < count; ++i) {
     frame_layout_.push_back(i);
-    (void)sensor_ids[i];
-    (void)field_names[i];
   }
 
-  // Ensure the scalar store slots are large enough.
   if (count > scalar_buf_.slot[0].size()) {
     scalar_buf_.slot[0].resize(count, 0.0);
     scalar_buf_.slot[1].resize(count, 0.0);
@@ -219,6 +218,9 @@ void VehicleNode::push_blobs_batch(const BngBlobDesc* descs, uint32_t count) {
       blob_slots_[d.sensor_idx].buf.commit();
     }
   }
+  // Wake the publish thread once after all slots are committed.
+  blob_dirty_.store(true, std::memory_order_release);
+  blob_cv_.notify_one();
 }
 
 void VehicleNode::start_publish_thread() {
@@ -230,8 +232,9 @@ void VehicleNode::start_publish_thread() {
 void VehicleNode::stop_publish_thread() {
   if (!running_.load()) return;
   running_.store(false);
-  // Wake the thread so it can observe running_=false and exit cleanly.
+  // Wake the thread on both CVs so it can observe running_=false and exit cleanly.
   scalar_buf_.cv_.notify_all();
+  blob_cv_.notify_all();
   if (publish_thread_.joinable()) publish_thread_.join();
 }
 
@@ -242,9 +245,9 @@ void VehicleNode::publish_loop() {
 
   while (running_.load(std::memory_order_relaxed)) {
 
-    // Sleep until a scalar commit wakes us, or the timeout expires.
-    // The 1 ms timeout lets us still process blobs and markers when only blob sensors are active
-    // (blobs have their own dirty flags but share the same thread).
+    // Wait for either scalar data or blob data, with a timeout for the marker visualizer.
+    // Previously only scalar_buf_ was awaited, which caused blob-only sensors (radar, lidar...) to be polled at 1ms intervals
+    // instead of being woken immediately on new data.
     const bool has_scalar = scalar_buf_.wait_for_data(1);
 
     if (!running_.load(std::memory_order_relaxed)) break;
@@ -258,15 +261,19 @@ void VehicleNode::publish_loop() {
       }
     }
 
-    for (auto& slot : blob_slots_) {
-      if (!slot.buf.is_dirty()) continue;
-      slot.buf.clear_dirty();
+    // Drain all dirty blob slots. blob_dirty_ is a coarse flag - check every slot when set.
+    if (blob_dirty_.load(std::memory_order_acquire)) {
+      blob_dirty_.store(false, std::memory_order_relaxed);
+      for (auto& slot : blob_slots_) {
+        if (!slot.buf.is_dirty()) continue;
+        slot.buf.clear_dirty();
 
-      const std::vector<uint8_t>& data = slot.buf.read_slot();
-      const uint64_t ts  = slot.timestamp_ns.load(std::memory_order_relaxed);
-      const uint32_t len = slot.actual_byte_len.load(std::memory_order_relaxed);
-      if (len > 0) {
-        slot.publish_fn(data.data(), len, ts);
+        const std::vector<uint8_t>& data = slot.buf.read_slot();
+        const uint64_t ts  = slot.timestamp_ns.load(std::memory_order_relaxed);
+        const uint32_t len = slot.actual_byte_len.load(std::memory_order_relaxed);
+        if (len > 0) {
+          slot.publish_fn(data.data(), len, ts);
+        }
       }
     }
 
@@ -316,7 +323,8 @@ void VehicleNode::publish_loop() {
     }
 
     // ROS2 executor work (subscriptions, services, etc.)
-    rclcpp::spin_some(std::static_pointer_cast<rclcpp::Node>(shared_from_this()));
+    // self_ptr_ is cached once at init to avoid a shared_ptr copy (atomic refcount) here.
+    rclcpp::spin_some(self_ptr_);
   }
 }
 
@@ -398,12 +406,7 @@ BNG_ROS2_API void bngros2_handle_set_sensor_field_string(void* handle,
 
 BNG_ROS2_API void bngros2_broadcast_tf(uint32_t id, double pos[3], double rot[4]) {
   auto it = nodes.find(id);
-  if (it == nodes.end()) return;
-  try {
-    it->second->broadcast_tf(pos, rot);
-  } catch (std::exception& e) {
-    std::cerr << "[ROS2 ERROR] " << e.what() << "\n";
-  }
+  if (it != nodes.end()) it->second->broadcast_tf(pos, rot);
 }
 
 BNG_ROS2_API void bngros2_vehicle_set_data(uint32_t id, double scale[3],

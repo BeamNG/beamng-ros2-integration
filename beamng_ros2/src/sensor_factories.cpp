@@ -5,6 +5,11 @@
 #include <beamng_msgs/msg/state_sensor.hpp>
 #include <beamng_msgs/msg/damage_sensor.hpp>
 #include <beamng_msgs/msg/time_sensor.hpp>
+#include <beamng_msgs/msg/radar_scan.hpp>
+#include <beamng_msgs/msg/ideal_radar_sensor.hpp>
+#include <sensor_msgs/msg/imu.hpp>
+#include <sensor_msgs/msg/nav_sat_fix.hpp>
+#include <sensor_msgs/msg/nav_sat_status.hpp>
 #include <sensor_msgs/msg/point_cloud2.hpp>
 #include <sensor_msgs/msg/image.hpp>
 #include <sensor_msgs/msg/point_field.hpp>
@@ -19,6 +24,7 @@
 #include <vector>
 #include <cstdint>
 #include <cstring>
+#include <cmath>
 
 namespace bng_ros2 {
 
@@ -175,7 +181,13 @@ static ScalarRegisterResult make_generic_factory(
   const std::string frame_id = sensor_cfg.frame_id.empty()
       ? std::string(node.get_name()) : sensor_cfg.frame_id;
 
-  PublishFn fn = [pub, node_ptr, frame_id, writers = std::move(writers)](
+  // Capture the expected store sizes so the publish-time bounds checks are simple integer comparisons against a captured constant,
+  // not a virtual call to vector::size() inside the hot loop.
+  const uint32_t expected_scalar_slots = scalar_base_idx + scalar_local_idx;
+  const uint32_t expected_string_slots = string_base_idx + string_local_idx;
+
+  PublishFn fn = [pub, node_ptr, frame_id, writers = std::move(writers),
+                  expected_scalar_slots, expected_string_slots](
       const ScalarStore& scalars, const StringStore& strings)
   {
     MsgT msg;
@@ -184,14 +196,15 @@ static ScalarRegisterResult make_generic_factory(
       msg.header.frame_id = frame_id;
     }
 
+    if (scalars.size() < expected_scalar_slots || strings.size() < expected_string_slots)
+      return;
+
     auto* base = reinterpret_cast<uint8_t*>(&msg);
     for (const auto& w : writers) {
       if (w.is_string) {
-        if (w.value_idx < strings.size())
-          write_string(base, w.offset, strings[w.value_idx]);
+        write_string(base, w.offset, strings[w.value_idx]);
       } else {
-        if (w.value_idx < scalars.size())
-          write_numeric(base, w.offset, w.type_id, scalars[w.value_idx]);
+        write_numeric(base, w.offset, w.type_id, scalars[w.value_idx]);
       }
     }
 
@@ -362,6 +375,231 @@ static BlobPublishFn make_pointcloud2_factory(
   };
 }
 
+// Wire format from Research.Radar.getLastReadingsBuffer:
+// flat array of returns, each return is 7 consecutive float32 values:
+//   [0] range                (float32)
+//   [1] doppler_velocity     (float32)
+//   [2] azimuth              (float32)
+//   [3] elevation            (float32)
+//   [4] radar_cross_section  (float32)
+//   [5] signal_to_noise_ratio(float32)
+//   [6] facing_factor        (float32)
+// Total: 28 bytes per return. Count = len / 28.
+static BlobPublishFn make_radar_scan_factory(
+    rclcpp::Node& node,
+    const std::string& topic,
+    const SensorConfig& cfg)
+{
+  using beamng_msgs::msg::RadarScan;
+  using beamng_msgs::msg::RadarReturn;
+
+  auto pub      = node.create_publisher<RadarScan>(topic, 10);
+  auto node_ptr = node.shared_from_this();
+  const std::string frame_id = cfg.frame_id.empty() ? std::string(node.get_name()) : cfg.frame_id;
+
+  static constexpr uint32_t RETURN_STRIDE = 7 * sizeof(float);  // 28 bytes
+
+  // Pre-allocate the message and size the returns vector to max capacity once.
+  // On each publish we only resize to the actual count (no-op if unchanged) and memcpy directly into each RadarReturn, avoiding per-call heap allocation.
+  const uint32_t max_returns = cfg.blob_layout.max_bytes > 0
+      ? cfg.blob_layout.max_bytes / RETURN_STRIDE : 1000u;
+
+  RadarScan tmpl;
+  tmpl.header.frame_id = frame_id;
+  tmpl.returns.reserve(max_returns);
+
+  return [pub, node_ptr, msg = std::move(tmpl)](
+      const uint8_t* data, uint32_t len, uint64_t ts_ns) mutable
+  {
+    const uint32_t count = len / RETURN_STRIDE;
+
+    msg.header.stamp = rclcpp::Time(static_cast<int64_t>(ts_ns));
+    msg.returns.resize(count);
+
+    // Cast the wire buffer directly into each RadarReturn's fields.
+    // RadarReturn contains 7 consecutive float32 members which are laid out identically to the wire format, so a single memcpy per return suffices.
+    const float* src = reinterpret_cast<const float*>(data);
+    for (uint32_t i = 0; i < count; ++i) {
+      auto& r = msg.returns[i];
+      const float* p = src + i * 7;
+      r.range                 = p[0];
+      r.doppler_velocity      = p[1];
+      r.azimuth               = p[2];
+      r.elevation             = p[3];
+      r.radar_cross_section   = p[4];
+      r.signal_to_noise_ratio = p[5];
+      r.facing_factor         = p[6];
+    }
+
+    pub->publish(msg);
+  };
+}
+
+// Wire format for AdvancedIMU (virtual blob, vehicle-side encoder):
+// Fixed 80-byte payload (10 × float64):
+//   [0..2]  angVelSmooth.xyz  (3×f64, 24 bytes)
+//   [3..5]  accSmooth.xyz     (3×f64, 24 bytes)
+//   [6..9]  orientation xyzw  (4×f64, 32 bytes) -- quaternion computed in Lua
+// All covariance fields are set to -1 (unknown).
+static BlobPublishFn make_imu_factory(
+    rclcpp::Node& node,
+    const std::string& topic,
+    const SensorConfig& cfg)
+{
+  using sensor_msgs::msg::Imu;
+
+  auto pub      = node.create_publisher<Imu>(topic, 10);
+  const std::string frame_id = cfg.frame_id.empty() ? std::string(node.get_name()) : cfg.frame_id;
+
+  static constexpr uint32_t PAYLOAD_SIZE = 10 * sizeof(double);  // 80 bytes
+
+  Imu tmpl;
+  tmpl.header.frame_id = frame_id;
+  tmpl.orientation_covariance[0]         = -1.0;
+  tmpl.angular_velocity_covariance[0]    = -1.0;
+  tmpl.linear_acceleration_covariance[0] = -1.0;
+
+  return [pub, msg = std::move(tmpl)](
+      const uint8_t* data, uint32_t len, uint64_t ts_ns) mutable
+  {
+    if (len < PAYLOAD_SIZE) return;
+
+    double f[10]; std::memcpy(f, data, sizeof(f));
+    msg.header.stamp          = rclcpp::Time(static_cast<int64_t>(ts_ns));
+    msg.angular_velocity.x    = f[0];
+    msg.angular_velocity.y    = f[1];
+    msg.angular_velocity.z    = f[2];
+    msg.linear_acceleration.x = f[3];
+    msg.linear_acceleration.y = f[4];
+    msg.linear_acceleration.z = f[5];
+    msg.orientation.x         = f[6];
+    msg.orientation.y         = f[7];
+    msg.orientation.z         = f[8];
+    msg.orientation.w         = f[9];
+
+    pub->publish(msg);
+  };
+}
+
+// Wire format for IdealRadar (virtual blob, vehicle-side encoder):
+// Fixed payload of 4 vehicle entries, each 124 bytes:
+//   [0]  vehicle_id              (int32,   4 bytes)
+//   [1]  width                   (float64, 8 bytes)
+//   [2]  length                  (float64, 8 bytes)
+//   [3]  dist_to_player_vehicle_sq (float64, 8 bytes)
+//   [4]  rel_dist_x              (float64, 8 bytes)
+//   [5]  rel_dist_y              (float64, 8 bytes)
+//   [6]  vel_bb.x                (float64, 8 bytes)
+//   [7]  vel_bb.y                (float64, 8 bytes)
+//   [8]  vel_bb.z                (float64, 8 bytes)
+//   [9]  rel_vel_x               (float64, 8 bytes)
+//   [10] rel_vel_y               (float64, 8 bytes)
+//   [11] acc.x                   (float64, 8 bytes)
+//   [12] acc.y                   (float64, 8 bytes)
+//   [13] acc.z                   (float64, 8 bytes)
+//   [14] rel_acc_x               (float64, 8 bytes)
+//   [15] rel_acc_y               (float64, 8 bytes)
+// Total: 4 + 15*8 = 124 bytes/vehicle, 496 bytes total.
+static BlobPublishFn make_ideal_radar_factory(
+    rclcpp::Node& node,
+    const std::string& topic,
+    const SensorConfig& cfg)
+{
+  using beamng_msgs::msg::IdealRadarSensor;
+  using beamng_msgs::msg::IdealRadarSensorVehicle;
+
+  auto pub      = node.create_publisher<IdealRadarSensor>(topic, 10);
+  auto node_ptr = node.shared_from_this();
+  const std::string frame_id = cfg.frame_id.empty() ? std::string(node.get_name()) : cfg.frame_id;
+
+  static constexpr uint32_t VEHICLE_STRIDE = 4 + 15 * sizeof(double);  // 124 bytes
+  static constexpr uint32_t PAYLOAD_SIZE   = 4 * VEHICLE_STRIDE;        // 496 bytes
+
+  IdealRadarSensor tmpl;
+  tmpl.header.frame_id = frame_id;
+
+  return [pub, node_ptr, msg = std::move(tmpl)](
+      const uint8_t* data, uint32_t len, uint64_t ts_ns) mutable
+  {
+    if (len < PAYLOAD_SIZE) return;
+
+    msg.header.stamp = rclcpp::Time(static_cast<int64_t>(ts_ns));
+
+    auto decode_vehicle = [&](uint32_t offset) -> IdealRadarSensorVehicle {
+      IdealRadarSensorVehicle v;
+      int32_t vid; std::memcpy(&vid, data + offset, 4); offset += 4;
+      double f[15]; std::memcpy(f, data + offset, 15 * sizeof(double));
+      v.vehicle_id                = vid;
+      v.width                     = f[0];
+      v.length                    = f[1];
+      v.dist_to_player_vehicle_sq = f[2];
+      v.rel_dist_x                = f[3];
+      v.rel_dist_y                = f[4];
+      v.vel_bb.x                  = f[5];
+      v.vel_bb.y                  = f[6];
+      v.vel_bb.z                  = f[7];
+      v.rel_vel_x                 = f[8];
+      v.rel_vel_y                 = f[9];
+      v.acc.x                     = f[10];
+      v.acc.y                     = f[11];
+      v.acc.z                     = f[12];
+      v.rel_acc_x                 = f[13];
+      v.rel_acc_y                 = f[14];
+      return v;
+    };
+
+    msg.closest_vehicles1 = decode_vehicle(0 * VEHICLE_STRIDE);
+    msg.closest_vehicles2 = decode_vehicle(1 * VEHICLE_STRIDE);
+    msg.closest_vehicles3 = decode_vehicle(2 * VEHICLE_STRIDE);
+    msg.closest_vehicles4 = decode_vehicle(3 * VEHICLE_STRIDE);
+
+    pub->publish(msg);
+  };
+}
+
+// Wire format for GPS (virtual blob, vehicle-side encoder):
+//   [0] latitude   (float64)
+//   [1] longitude  (float64)
+//   [2] altitude   (float64, NaN when unavailable)
+// Total: 24 bytes, always fixed-size.
+static BlobPublishFn make_nav_sat_fix_factory(
+    rclcpp::Node& node,
+    const std::string& topic,
+    const SensorConfig& cfg)
+{
+  using sensor_msgs::msg::NavSatFix;
+  using sensor_msgs::msg::NavSatStatus;
+
+  auto pub      = node.create_publisher<NavSatFix>(topic, 10);
+  auto node_ptr = node.shared_from_this();
+  const std::string frame_id = cfg.frame_id.empty() ? std::string(node.get_name()) : cfg.frame_id;
+
+  static constexpr uint32_t PAYLOAD_SIZE = 3 * sizeof(double);  // 24 bytes
+
+  NavSatFix tmpl;
+  tmpl.header.frame_id               = frame_id;
+  tmpl.status.status                 = NavSatStatus::STATUS_FIX;
+  tmpl.status.service                = NavSatStatus::SERVICE_GPS;
+  tmpl.position_covariance_type      = NavSatFix::COVARIANCE_TYPE_UNKNOWN;
+  tmpl.position_covariance           = {0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0};
+
+  return [pub, node_ptr, msg = std::move(tmpl)](
+      const uint8_t* data, uint32_t len, uint64_t ts_ns) mutable
+  {
+    if (len < PAYLOAD_SIZE) return;
+
+    double vals[3];
+    std::memcpy(vals, data, PAYLOAD_SIZE);
+
+    msg.header.stamp = rclcpp::Time(static_cast<int64_t>(ts_ns));
+    msg.latitude     = vals[0];
+    msg.longitude    = vals[1];
+    msg.altitude     = vals[2];
+
+    pub->publish(msg);
+  };
+}
+
 static BlobPublishFn make_image_factory(
     rclcpp::Node& node,
     const std::string& topic,
@@ -432,23 +670,13 @@ void register_all_sensor_factories() {
 
   #undef REGISTER
 
-  reg.register_blob_factory("DamageSensor",
-    [](rclcpp::Node& node, const std::string& topic,
-        const SensorConfig& cfg) -> BlobPublishFn {
-      return make_dynamic_array_sensor_factory(node, topic, cfg);
-    });
-
-  reg.register_blob_factory("PointCloud2",
-    [](rclcpp::Node& node, const std::string& topic,
-        const SensorConfig& cfg) -> BlobPublishFn {
-      return make_pointcloud2_factory(node, topic, cfg);
-    });
-
-  reg.register_blob_factory("Image",
-    [](rclcpp::Node& node, const std::string& topic,
-        const SensorConfig& cfg) -> BlobPublishFn {
-      return make_image_factory(node, topic, cfg);
-    });
+  reg.register_blob_factory("DamageSensor",    make_dynamic_array_sensor_factory);
+  reg.register_blob_factory("Imu",             make_imu_factory);
+  reg.register_blob_factory("PointCloud2",     make_pointcloud2_factory);
+  reg.register_blob_factory("RadarScan",       make_radar_scan_factory);
+  reg.register_blob_factory("NavSatFix",       make_nav_sat_fix_factory);
+  reg.register_blob_factory("IdealRadarSensor",make_ideal_radar_factory);
+  reg.register_blob_factory("Image",           make_image_factory);
 }
 
 }  // namespace bng_ros2
