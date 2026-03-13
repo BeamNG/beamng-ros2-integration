@@ -7,6 +7,7 @@
 #include <beamng_msgs/msg/time_sensor.hpp>
 #include <beamng_msgs/msg/radar_scan.hpp>
 #include <beamng_msgs/msg/ideal_radar_sensor.hpp>
+#include <beamng_msgs/msg/powertrain_sensor.hpp>
 #include <beamng_msgs/msg/roads_sensor.hpp>
 #include <sensor_msgs/msg/imu.hpp>
 #include <sensor_msgs/msg/nav_sat_fix.hpp>
@@ -208,11 +209,18 @@ static ScalarRegisterResult make_generic_factory(
         write_numeric(base, w.offset, w.type_id, scalars[w.value_idx]);
       }
     }
-
+    
     pub->publish(msg);
   };
-
+  
   return {std::move(fn), scalar_local_idx, string_local_idx};
+}
+
+// Reads a uint8 from a byte buffer at *pos and advances *pos.
+static inline uint8_t read_u8(const uint8_t* data, uint32_t* pos) {
+  uint8_t v = data[*pos];
+  *pos += 1;
+  return v;
 }
 
 // Reads a uint16 from a byte buffer at *pos and advances *pos.
@@ -226,6 +234,14 @@ static inline uint16_t read_u16(const uint8_t* data, uint32_t* pos) {
 // Reads a uint32 from a byte buffer at *pos and advances *pos.
 static inline uint32_t read_u32(const uint8_t* data, uint32_t* pos) {
   uint32_t v;
+  std::memcpy(&v, data + *pos, sizeof(v));
+  *pos += sizeof(v);
+  return v;
+}
+
+// Reads a int32 from a byte buffer at *pos and advances *pos.
+static inline int32_t read_i32(const uint8_t* data, uint32_t* pos) {
+  int32_t v;
   std::memcpy(&v, data + *pos, sizeof(v));
   *pos += sizeof(v);
   return v;
@@ -325,6 +341,51 @@ static BlobPublishFn make_dynamic_array_sensor_factory(
   };
 
   return make_dynamic_array_factory<Msg>(node, topic, cfg, std::move(readers));
+}
+
+// Wire format for PowertrainSensor (virtual blob, vehicle-side encoder):
+// [uint32 device_count] then for each device:
+//   name (u16 len + bytes), input_av (f64), gear_ratio (f64), is_broken (u8),
+//   mode (u16 + bytes), parent_name (u16 + bytes), parent_output_index (i32),
+//   output_torque_1, output_av_1, output_torque_2, output_av_2 (f64).
+static BlobPublishFn make_powertrain_sensor_factory(
+    rclcpp::Node& node,
+    const std::string& topic,
+    const SensorConfig& cfg)
+{
+  using beamng_msgs::msg::PowertrainSensor;
+  using beamng_msgs::msg::PowertrainSensorDevice;
+
+  auto pub = node.create_publisher<PowertrainSensor>(topic, 10);
+  const std::string frame_id = cfg.frame_id.empty() ? std::string(node.get_name()) : cfg.frame_id;
+
+  return [pub, frame_id](const uint8_t* data, uint32_t len, uint64_t ts_ns) mutable
+  {
+    PowertrainSensor msg;
+    msg.header.stamp    = rclcpp::Time(static_cast<int64_t>(ts_ns));
+    msg.header.frame_id = frame_id;
+
+    uint32_t pos = 0;
+    if (pos + sizeof(uint32_t) > len) return;
+    const uint32_t count = read_u32(data, &pos);
+
+    for (uint32_t i = 0; i < count && pos < len; ++i) {
+      PowertrainSensorDevice dev;
+      dev.name            = read_str(data, &pos);
+      dev.input_av        = read_f64(data, &pos);
+      dev.gear_ratio      = read_f64(data, &pos);
+      dev.is_broken       = (read_u8(data, &pos) != 0);
+      dev.mode            = read_str(data, &pos);
+      dev.parent_name     = read_str(data, &pos);
+      dev.parent_output_index = read_i32(data, &pos);
+      dev.output_torque_1 = read_f64(data, &pos);
+      dev.output_av_1     = read_f64(data, &pos);
+      dev.output_torque_2 = read_f64(data, &pos);
+      dev.output_av_2    = read_f64(data, &pos);
+      msg.devices.push_back(dev);
+    }
+    pub->publish(msg);
+  };
 }
 
 static BlobPublishFn make_pointcloud2_factory(
@@ -738,8 +799,9 @@ void register_all_sensor_factories() {
   reg.register_blob_factory("PointCloud2",     make_pointcloud2_factory);
   reg.register_blob_factory("RadarScan",       make_radar_scan_factory);
   reg.register_blob_factory("NavSatFix",       make_nav_sat_fix_factory);
-  reg.register_blob_factory("RoadsSensor",     make_roads_sensor_factory);
-  reg.register_blob_factory("IdealRadarSensor",make_ideal_radar_factory);
+  reg.register_blob_factory("RoadsSensor",       make_roads_sensor_factory);
+  reg.register_blob_factory("PowertrainSensor",  make_powertrain_sensor_factory);
+  reg.register_blob_factory("IdealRadarSensor",  make_ideal_radar_factory);
   reg.register_blob_factory("Image",           make_image_factory);
 }
 
