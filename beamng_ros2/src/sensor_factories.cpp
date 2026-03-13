@@ -7,6 +7,7 @@
 #include <beamng_msgs/msg/time_sensor.hpp>
 #include <beamng_msgs/msg/radar_scan.hpp>
 #include <beamng_msgs/msg/ideal_radar_sensor.hpp>
+#include <beamng_msgs/msg/roads_sensor.hpp>
 #include <sensor_msgs/msg/imu.hpp>
 #include <sensor_msgs/msg/nav_sat_fix.hpp>
 #include <sensor_msgs/msg/nav_sat_status.hpp>
@@ -481,6 +482,68 @@ static BlobPublishFn make_imu_factory(
   };
 }
 
+// Wire format for RoadsSensor (virtual blob, vehicle-side encoder):
+// Fixed 432-byte payload (54 × float64), order matches RoadsSensor.msg:
+//   [0..5]   dist2_cl, dist2_left, dist2_right, half_width, road_radius, heading_angle
+//   [6..17]  p0_on_cl..p3_on_cl (4× Point xyz)
+//   [18..25] u_cl, v_cl (2× CubicPolynomial abcd)
+//   [26..41] u_left_re, v_left_re, u_right_re, v_right_re (4× abcd)
+//   [42..50] start_cl, start_l, start_r (3× Point xyz)
+//   [51..53] drivability, speed_limit, flag1way
+static BlobPublishFn make_roads_sensor_factory(
+    rclcpp::Node& node,
+    const std::string& topic,
+    const SensorConfig& cfg)
+{
+  using beamng_msgs::msg::RoadsSensor;
+
+  auto pub = node.create_publisher<RoadsSensor>(topic, 10);
+  const std::string frame_id = cfg.frame_id.empty() ? std::string(node.get_name()) : cfg.frame_id;
+
+  static constexpr uint32_t PAYLOAD_SIZE = 54 * sizeof(double);  // 432 bytes
+
+  RoadsSensor tmpl;
+  tmpl.header.frame_id = frame_id;
+
+  return [pub, msg = std::move(tmpl)](
+      const uint8_t* data, uint32_t len, uint64_t ts_ns) mutable
+  {
+    if (len < PAYLOAD_SIZE) return;
+
+    const double* f = reinterpret_cast<const double*>(data);
+    msg.header.stamp = rclcpp::Time(static_cast<int64_t>(ts_ns));
+
+    msg.dist2_cl      = f[0];
+    msg.dist2_left    = f[1];
+    msg.dist2_right   = f[2];
+    msg.half_width   = f[3];
+    msg.road_radius  = f[4];
+    msg.heading_angle = f[5];
+
+    msg.p0_on_cl.x = f[6];  msg.p0_on_cl.y = f[7];  msg.p0_on_cl.z = f[8];
+    msg.p1_on_cl.x = f[9];  msg.p1_on_cl.y = f[10]; msg.p1_on_cl.z = f[11];
+    msg.p2_on_cl.x = f[12]; msg.p2_on_cl.y = f[13]; msg.p2_on_cl.z = f[14];
+    msg.p3_on_cl.x = f[15]; msg.p3_on_cl.y = f[16]; msg.p3_on_cl.z = f[17];
+
+    msg.u_cl.a = f[18]; msg.u_cl.b = f[19]; msg.u_cl.c = f[20]; msg.u_cl.d = f[21];
+    msg.v_cl.a = f[22]; msg.v_cl.b = f[23]; msg.v_cl.c = f[24]; msg.v_cl.d = f[25];
+    msg.u_left_re.a = f[26]; msg.u_left_re.b = f[27]; msg.u_left_re.c = f[28]; msg.u_left_re.d = f[29];
+    msg.v_left_re.a = f[30]; msg.v_left_re.b = f[31]; msg.v_left_re.c = f[32]; msg.v_left_re.d = f[33];
+    msg.u_right_re.a = f[34]; msg.u_right_re.b = f[35]; msg.u_right_re.c = f[36]; msg.u_right_re.d = f[37];
+    msg.v_right_re.a = f[38]; msg.v_right_re.b = f[39]; msg.v_right_re.c = f[40]; msg.v_right_re.d = f[41];
+
+    msg.start_cl.x = f[42]; msg.start_cl.y = f[43]; msg.start_cl.z = f[44];
+    msg.start_l.x  = f[45]; msg.start_l.y  = f[46]; msg.start_l.z  = f[47];
+    msg.start_r.x  = f[48]; msg.start_r.y  = f[49]; msg.start_r.z  = f[50];
+
+    msg.drivability = f[51];
+    msg.speed_limit = f[52];
+    msg.flag1way    = f[53];
+
+    pub->publish(msg);
+  };
+}
+
 // Wire format for IdealRadar (virtual blob, vehicle-side encoder):
 // Fixed payload of 4 vehicle entries, each 124 bytes:
 //   [0]  vehicle_id              (int32,   4 bytes)
@@ -675,6 +738,7 @@ void register_all_sensor_factories() {
   reg.register_blob_factory("PointCloud2",     make_pointcloud2_factory);
   reg.register_blob_factory("RadarScan",       make_radar_scan_factory);
   reg.register_blob_factory("NavSatFix",       make_nav_sat_fix_factory);
+  reg.register_blob_factory("RoadsSensor",     make_roads_sensor_factory);
   reg.register_blob_factory("IdealRadarSensor",make_ideal_radar_factory);
   reg.register_blob_factory("Image",           make_image_factory);
 }
