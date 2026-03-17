@@ -23,6 +23,13 @@ static uint32_t compute_max_bytes(const nlohmann::json& layout) {
     return pts * stride;
   }
 
+  // Mesh sensor: maxNodes * (10 f64 + u16 len prefix + avg partOrigin) + maxBeams * f64 + 2 u32 counts
+  if (layout.contains("maxNodes") && layout.contains("maxBeams")) {
+    const uint32_t nodes = layout.at("maxNodes").get<uint32_t>();
+    const uint32_t beams = layout.at("maxBeams").get<uint32_t>();
+    return nodes * (80 + 2 + 64) + beams * 8 + 8;
+  }
+
   // Image: width * height * channels (derived from format)
   if (layout.contains("width") && layout.contains("height")) {
     const uint32_t w = layout.at("width").get<uint32_t>();

@@ -9,6 +9,9 @@
 #include <beamng_msgs/msg/ideal_radar_sensor.hpp>
 #include <beamng_msgs/msg/powertrain_sensor.hpp>
 #include <beamng_msgs/msg/roads_sensor.hpp>
+#include <beamng_msgs/msg/mesh_sensor.hpp>
+#include <beamng_msgs/msg/mesh_sensor_node.hpp>
+#include <beamng_msgs/msg/mesh_sensor_beam.hpp>
 #include <sensor_msgs/msg/imu.hpp>
 #include <sensor_msgs/msg/nav_sat_fix.hpp>
 #include <sensor_msgs/msg/nav_sat_status.hpp>
@@ -773,6 +776,60 @@ static BlobPublishFn make_image_factory(
   };
 }
 
+static BlobPublishFn make_mesh_sensor_factory(
+    rclcpp::Node& node,
+    const std::string& topic,
+    const SensorConfig& cfg)
+{
+  using beamng_msgs::msg::MeshSensor;
+  using beamng_msgs::msg::MeshSensorNode;
+  using beamng_msgs::msg::MeshSensorBeam;
+
+  auto pub = node.create_publisher<MeshSensor>(topic, 10);
+  const std::string frame_id = cfg.frame_id.empty() ? std::string(node.get_name()) : cfg.frame_id;
+  // Reuse one message to avoid per-publish allocations (nodes/beams vectors keep capacity after clear).
+  MeshSensor msg;
+
+  return [pub, frame_id, msg](const uint8_t* data, uint32_t len, uint64_t ts_ns) mutable
+  {
+    msg.header.stamp    = rclcpp::Time(static_cast<int64_t>(ts_ns));
+    msg.header.frame_id = frame_id;
+    msg.nodes.clear();
+    msg.beams.clear();
+
+    uint32_t pos = 0;
+    if (pos + sizeof(uint32_t) > len) return;
+    const uint32_t node_count = read_u32(data, &pos);
+    msg.nodes.reserve(node_count);
+
+    for (uint32_t i = 0; i < node_count && pos + 80 <= len; ++i) {
+      MeshSensorNode n;
+      const double* d = reinterpret_cast<const double*>(data + pos);
+      n.pos.x   = d[0]; n.pos.y   = d[1]; n.pos.z   = d[2];
+      n.vel.x   = d[3]; n.vel.y   = d[4]; n.vel.z   = d[5];
+      n.force.x = d[6]; n.force.y = d[7]; n.force.z = d[8];
+      n.mass    = d[9];
+      pos += 80; // 80 bytes per node
+      n.part_origin = read_str(data, &pos);
+      msg.nodes.push_back(std::move(n));
+    }
+
+    if (pos + sizeof(uint32_t) > len) { pub->publish(msg); return; }
+    const uint32_t beam_count = read_u32(data, &pos);
+    msg.beams.reserve(beam_count);
+    if (pos + beam_count * sizeof(double) > len) { pub->publish(msg); return; }
+    const double* beam_stresses = reinterpret_cast<const double*>(data + pos);
+    for (uint32_t i = 0; i < beam_count; ++i) {
+      MeshSensorBeam b;
+      b.stress = beam_stresses[i];
+      msg.beams.push_back(b);
+    }
+    pos += beam_count * sizeof(double);
+
+    pub->publish(msg);
+  };
+}
+
 void register_all_sensor_factories() {
   using namespace beamng_msgs::msg;
   auto& reg = SensorFactoryRegistry::instance();
@@ -803,6 +860,7 @@ void register_all_sensor_factories() {
   reg.register_blob_factory("PowertrainSensor",  make_powertrain_sensor_factory);
   reg.register_blob_factory("IdealRadarSensor",  make_ideal_radar_factory);
   reg.register_blob_factory("Image",           make_image_factory);
+  reg.register_blob_factory("MeshSensor",      make_mesh_sensor_factory);
 }
 
 }  // namespace bng_ros2
