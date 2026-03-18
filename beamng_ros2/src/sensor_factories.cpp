@@ -16,8 +16,9 @@
 #include <sensor_msgs/msg/nav_sat_fix.hpp>
 #include <sensor_msgs/msg/nav_sat_status.hpp>
 #include <sensor_msgs/msg/point_cloud2.hpp>
-#include <sensor_msgs/msg/image.hpp>
 #include <sensor_msgs/msg/point_field.hpp>
+#include <sensor_msgs/msg/range.hpp>
+#include <sensor_msgs/msg/image.hpp>
 #include <rosidl_typesupport_introspection_cpp/field_types.hpp>
 #include <rosidl_typesupport_introspection_cpp/identifier.hpp>
 #include <rosidl_typesupport_introspection_cpp/message_introspection.hpp>
@@ -245,6 +246,14 @@ static inline uint32_t read_u32(const uint8_t* data, uint32_t* pos) {
 // Reads a int32 from a byte buffer at *pos and advances *pos.
 static inline int32_t read_i32(const uint8_t* data, uint32_t* pos) {
   int32_t v;
+  std::memcpy(&v, data + *pos, sizeof(v));
+  *pos += sizeof(v);
+  return v;
+}
+
+// Reads a float32 from a byte buffer at *pos and advances *pos.
+static inline float read_f32(const uint8_t* data, uint32_t* pos) {
+  float v;
   std::memcpy(&v, data + *pos, sizeof(v));
   *pos += sizeof(v);
   return v;
@@ -727,51 +736,77 @@ static BlobPublishFn make_nav_sat_fix_factory(
   };
 }
 
+// Wire format for Ultrasonic (Range): produced in GE Lua from getUltrasonicReadings.
+// Fixed 17-byte payload: radiation_type (uint8), field_of_view (float), min_range (float), max_range (float), range (float).
+static BlobPublishFn make_range_factory(
+    rclcpp::Node& node,
+    const std::string& topic,
+    const SensorConfig& cfg)
+{
+  using sensor_msgs::msg::Range;
+
+  auto pub      = node.create_publisher<Range>(topic, 10);
+  const std::string frame_id = cfg.frame_id.empty() ? std::string(node.get_name()) : cfg.frame_id;
+
+  static constexpr uint32_t PAYLOAD_SIZE = 1 + 4 * sizeof(float);  // 17 bytes
+
+  Range tmpl;
+  tmpl.header.frame_id   = frame_id;
+  tmpl.radiation_type    = Range::ULTRASOUND;
+  tmpl.field_of_view    = 0.1f;
+  tmpl.min_range        = 0.0f;
+  tmpl.max_range        = 0.0f;
+  tmpl.range            = 0.0f;
+
+  return [pub, msg = std::move(tmpl)](
+      const uint8_t* data, uint32_t len, uint64_t ts_ns) mutable
+  {
+    if (len < PAYLOAD_SIZE) return;
+
+    uint32_t pos = 0;
+    msg.header.stamp     = rclcpp::Time(static_cast<int64_t>(ts_ns));
+    msg.radiation_type   = data[pos]; pos += 1;
+    msg.field_of_view    = read_f32(data, &pos);
+    msg.min_range        = read_f32(data, &pos);
+    msg.max_range        = read_f32(data, &pos);
+    msg.range            = read_f32(data, &pos);
+
+    pub->publish(msg);
+  };
+}
+
+// Wire format for Camera (Image): raw rgb8 pixel data; width/height/step from blob_layout.
+// Pre-allocate msg.data to avoid per-publish realloc; skip publish when len==0 (rate-limited skip).
 static BlobPublishFn make_image_factory(
     rclcpp::Node& node,
     const std::string& topic,
     const SensorConfig& cfg)
 {
-  auto pub = node.create_publisher<sensor_msgs::msg::Image>(topic, 10);
+  using sensor_msgs::msg::Image;
 
-  sensor_msgs::msg::Image tmpl;
-  tmpl.header.frame_id = cfg.frame_id.empty() ? node.get_name() : cfg.frame_id;
-  tmpl.width           = cfg.blob_layout.width;
-  tmpl.height          = cfg.blob_layout.height;
-  tmpl.is_bigendian    = false;
+  auto pub = node.create_publisher<Image>(topic, 10);
+  const std::string frame_id = cfg.frame_id.empty() ? std::string(node.get_name()) : cfg.frame_id;
+  const uint32_t width  = cfg.blob_layout.width > 0  ? cfg.blob_layout.width  : 512u;
+  const uint32_t height = cfg.blob_layout.height > 0 ? cfg.blob_layout.height : 512u;
+  const uint32_t step  = width * 3u;  // rgb8
+  const uint32_t max_bytes = (cfg.blob_layout.max_bytes > 0) ? cfg.blob_layout.max_bytes : (width * height * 3u);
 
-  if (cfg.blob_layout.format == "rgba_uint8") {
-    tmpl.encoding = "rgba8";
-    tmpl.step     = cfg.blob_layout.width * 4;
-  } else if (cfg.blob_layout.format == "rgb_uint8") {
-    tmpl.encoding = "rgb8";
-    tmpl.step     = cfg.blob_layout.width * 3;
-  } else if (cfg.blob_layout.format == "depth_float32") {
-    tmpl.encoding = "32FC1";
-    tmpl.step     = cfg.blob_layout.width * 4;
-  } else if (cfg.blob_layout.format == "mono_uint8") {
-    tmpl.encoding = "mono8";
-    tmpl.step     = cfg.blob_layout.width;
-  } else {
-    std::cerr << "[ROS2 WARN] make_image_factory: unknown format '"
-              << cfg.blob_layout.format << "' for sensor '" << cfg.id
-              << "', using raw passthrough.\n";
-    tmpl.encoding = "rgb8";
-    tmpl.step     = cfg.blob_layout.width * 3;
-  }
+  Image tmpl;
+  tmpl.header.frame_id = frame_id;
+  tmpl.height          = height;
+  tmpl.width           = width;
+  tmpl.encoding        = "rgb8";
+  tmpl.is_bigendian    = 0;
+  tmpl.step            = step;
+  tmpl.data.resize(max_bytes);  // fixed size once; no per-publish resize for constant resolution
 
-  const uint32_t max_bytes = cfg.blob_layout.max_bytes;
-  if (max_bytes > 0) {
-    tmpl.data.resize(max_bytes);
-  }
-
-  // Capture msg directly so the lambda reuses the same allocation every call.
-  // Only stamp and data change per frame; all other fields are fixed at init.
   return [pub, msg = std::move(tmpl)](
       const uint8_t* data, uint32_t len, uint64_t ts_ns) mutable
   {
+    if (len == 0) return;  // rate-limited skip or no data
     msg.header.stamp = rclcpp::Time(static_cast<int64_t>(ts_ns));
-    msg.data.assign(data, data + len);
+    if (msg.data.size() != len) msg.data.resize(len);
+    std::memcpy(msg.data.data(), data, len);
     pub->publish(msg);
   };
 }
@@ -859,8 +894,9 @@ void register_all_sensor_factories() {
   reg.register_blob_factory("RoadsSensor",       make_roads_sensor_factory);
   reg.register_blob_factory("PowertrainSensor",  make_powertrain_sensor_factory);
   reg.register_blob_factory("IdealRadarSensor",  make_ideal_radar_factory);
-  reg.register_blob_factory("Image",           make_image_factory);
   reg.register_blob_factory("MeshSensor",      make_mesh_sensor_factory);
+  reg.register_blob_factory("Range",           make_range_factory);
+  reg.register_blob_factory("Image",           make_image_factory);
 }
 
 }  // namespace bng_ros2

@@ -7,13 +7,15 @@
 #include <visualization_msgs/msg/marker_array.hpp>
 #include "definitions.h"
 #include "math_helpers.h"
-#include <iostream>
+#include <chrono>
 #include <cstring>
+#include <iostream>
 
 namespace bng_ros2 {
 
 VehicleNode::VehicleNode(const std::string& name)
-    : Node(name, "beamng_bridge"), name_(name) {
+    : Node(name, "beamng_bridge"), name_(name),
+      last_image_shmem_publish_(std::chrono::steady_clock::now()) {
   tf_broadcaster_ = std::make_unique<tf2_ros::TransformBroadcaster>(*this);
   visualizer_ = create_publisher<visualization_msgs::msg::MarkerArray>("~/marker", 10);
   // NOTE: init_sensor_publishers() must be called AFTER make_shared() returns.
@@ -196,6 +198,9 @@ uint32_t VehicleNode::register_blob_sensors(const char* const* sensor_ids,
 }
 
 void VehicleNode::push_blobs_batch(const BngBlobDesc* descs, uint32_t count) {
+  // Guard: avoid dereferencing if no blob slots (e.g. node created before config loaded).
+  if (blob_slots_.empty() || count == 0) return;
+
   // Write all blob slots first, commit all at the end.
   // This ensures the publish thread never wakes to a state where some slots have new data and
   // others still hold stale data from the previous frame.
@@ -223,6 +228,26 @@ void VehicleNode::push_blobs_batch(const BngBlobDesc* descs, uint32_t count) {
   blob_cv_.notify_one();
 }
 
+void VehicleNode::set_image_shmem(uint32_t sensor_idx, const std::string& shmem_name, uint32_t width, uint32_t height) {
+  if (sensor_idx >= blob_slots_.size()) return;
+  const size_t n_pixels = static_cast<size_t>(width) * height;
+  const size_t rgba_size = n_pixels * 4u;
+  const size_t rgb_len = n_pixels * 3u;
+  ImageShmemSlot slot;
+  slot.width = width;
+  slot.height = height;
+  slot.n_pixels = n_pixels;
+  slot.rgb_len = rgb_len;
+  slot.rgb_buffer.resize(rgb_len);
+  if (!slot.reader.open(shmem_name, rgba_size)) {
+    std::cerr << "[ROS2 WARN] set_image_shmem: failed to open shmem '" << shmem_name << "' (size " << rgba_size << ").\n";
+    return;
+  }
+  image_shmem_slots_[sensor_idx] = std::move(slot);
+  image_shmem_slot_order_.push_back(sensor_idx);
+  std::cout << "[ROS2 INFO] Image sensor slot " << sensor_idx << " reading from shmem '" << shmem_name << "' " << width << "x" << height << ".\n";
+}
+
 void VehicleNode::start_publish_thread() {
   if (running_.load()) return;
   running_.store(true);
@@ -242,15 +267,58 @@ void VehicleNode::publish_loop() {
   // Rate limiter for the marker visualizer
   auto last_marker_publish = std::chrono::steady_clock::now();
   constexpr auto kMarkerInterval = std::chrono::milliseconds(100);
+  constexpr auto kImageShmemInterval = std::chrono::milliseconds(15);  // ~50 Hz
 
   while (running_.load(std::memory_order_relaxed)) {
 
-    // Wait for either scalar data or blob data, with a timeout for the marker visualizer.
-    // Previously only scalar_buf_ was awaited, which caused blob-only sensors (radar, lidar...) to be polled at 1ms intervals
-    // instead of being woken immediately on new data.
-    const bool has_scalar = scalar_buf_.wait_for_data(1);
+    // Dynamic wait: wake frequently when we have image slots so image is not delayed by scalar/blob/markers/spin_some.
+    // Cap sleep at 5 ms so we re-check in time for the next 20 ms image; otherwise one slow loop body would drop to 5-10 Hz.
+    auto now_wait = std::chrono::steady_clock::now();
+    int wait_ms = 1;
+    if (!image_shmem_slots_.empty()) {
+      auto next_img = last_image_shmem_publish_ + kImageShmemInterval;
+      auto remaining_ms = std::chrono::duration_cast<std::chrono::milliseconds>(next_img - now_wait).count();
+      if (remaining_ms <= 0) wait_ms = 0;
+      else wait_ms = static_cast<int>(std::min(remaining_ms, static_cast<int64_t>(15)));
+    }
+    const bool has_scalar = scalar_buf_.wait_for_data(wait_ms);
 
     if (!running_.load(std::memory_order_relaxed)) break;
+
+    // Image from shmem first so we never delay it with scalar/blob work; keeps steady ~50 Hz.
+    if (!image_shmem_slots_.empty()) {
+      const auto now_img = std::chrono::steady_clock::now();
+      if (now_img - last_image_shmem_publish_ >= kImageShmemInterval) {
+        last_image_shmem_publish_ = now_img;
+        const int64_t ts_ns = get_clock()->now().nanoseconds();
+        for (uint32_t slot_idx : image_shmem_slot_order_) {
+          auto it = image_shmem_slots_.find(slot_idx);
+          if (it == image_shmem_slots_.end() || slot_idx >= blob_slots_.size()) continue;
+          ImageShmemSlot& img = it->second;
+          if (!img.reader.is_open() || img.n_pixels == 0) continue;
+          const uint8_t* src = img.reader.data();
+          uint8_t* dst = img.rgb_buffer.data();
+          const uint32_t w = img.width;
+          const uint32_t h = img.height;
+          for (uint32_t y = 0; y < h; ++y) {
+            const uint8_t* row_src = src + y * w * 4u;
+            uint8_t* row_dst = dst + y * w * 3u;
+            uint32_t x = 0;
+            for (; x + 4 <= w; x += 4) {
+              row_dst[0] = row_src[0];  row_dst[1] = row_src[1];  row_dst[2] = row_src[2];  row_src += 4; row_dst += 3;
+              row_dst[0] = row_src[0];  row_dst[1] = row_src[1];  row_dst[2] = row_src[2];  row_src += 4; row_dst += 3;
+              row_dst[0] = row_src[0];  row_dst[1] = row_src[1];  row_dst[2] = row_src[2];  row_src += 4; row_dst += 3;
+              row_dst[0] = row_src[0];  row_dst[1] = row_src[1];  row_dst[2] = row_src[2];  row_src += 4; row_dst += 3;
+            }
+            for (; x < w; ++x) {
+              row_dst[0] = row_src[0];  row_dst[1] = row_src[1];  row_dst[2] = row_src[2];
+              row_src += 4; row_dst += 3;
+            }
+          }
+          blob_slots_[slot_idx].publish_fn(img.rgb_buffer.data(), static_cast<uint32_t>(img.rgb_len), static_cast<uint64_t>(ts_ns));
+        }
+      }
+    }
 
     if (has_scalar) {
       scalar_buf_.clear_dirty();
@@ -261,13 +329,14 @@ void VehicleNode::publish_loop() {
       }
     }
 
-    // Drain all dirty blob slots. blob_dirty_ is a coarse flag - check every slot when set.
+    // Drain all dirty blob slots (non-image; image slots are published from shmem above).
     if (blob_dirty_.load(std::memory_order_acquire)) {
       blob_dirty_.store(false, std::memory_order_relaxed);
-      for (auto& slot : blob_slots_) {
+      for (uint32_t i = 0; i < blob_slots_.size(); ++i) {
+        if (image_shmem_slots_.count(i)) continue;
+        BlobSlot& slot = blob_slots_[i];
         if (!slot.buf.is_dirty()) continue;
         slot.buf.clear_dirty();
-
         const std::vector<uint8_t>& data = slot.buf.read_slot();
         const uint64_t ts  = slot.timestamp_ns.load(std::memory_order_relaxed);
         const uint32_t len = slot.actual_byte_len.load(std::memory_order_relaxed);
@@ -393,7 +462,18 @@ BNG_ROS2_API void bngros2_handle_push_frame(void* handle, const double* values, 
 BNG_ROS2_API void bngros2_handle_push_blobs_batch(void* handle,
                                                     const BngBlobDesc* descs,
                                                     uint32_t count) {
+  if (!handle || !descs) return;
   static_cast<bng_ros2::VehicleNode*>(handle)->push_blobs_batch(descs, count);
+}
+
+BNG_ROS2_API void bngros2_handle_set_image_shmem(void* handle,
+                                                 uint32_t sensor_idx,
+                                                 const char* shmem_name,
+                                                 uint32_t width,
+                                                 uint32_t height) {
+  if (!handle || !shmem_name) return;
+  static_cast<bng_ros2::VehicleNode*>(handle)->set_image_shmem(
+      sensor_idx, shmem_name, width, height);
 }
 
 BNG_ROS2_API void bngros2_handle_set_sensor_field_string(void* handle,

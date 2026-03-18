@@ -14,7 +14,16 @@ SensorRegistry& SensorRegistry::instance() {
 static uint32_t compute_max_bytes(const nlohmann::json& layout) {
   if (!layout.is_object()) return 0;
 
-  const std::string fmt = layout.value("format", "");
+  // Image: width * height * bytes_per_pixel (3 for rgb8)
+  if (layout.contains("width") && layout.contains("height")) {
+    const uint32_t w = layout.at("width").get<uint32_t>();
+    const uint32_t h = layout.at("height").get<uint32_t>();
+    const std::string fmt = layout.value("format", "rgb8");
+    if (fmt == "rgb8" || fmt == "rgb_uint8") return w * h * 3u;
+    if (fmt == "rgba8") return w * h * 4u;
+    if (fmt == "8UC1" || fmt == "mono8") return w * h * 1u;
+    return w * h * 3u;
+  }
 
   // Point cloud: maxPoints * pointStride
   if (layout.contains("maxPoints") && layout.contains("pointStride")) {
@@ -28,18 +37,6 @@ static uint32_t compute_max_bytes(const nlohmann::json& layout) {
     const uint32_t nodes = layout.at("maxNodes").get<uint32_t>();
     const uint32_t beams = layout.at("maxBeams").get<uint32_t>();
     return nodes * (80 + 2 + 64) + beams * 8 + 8;
-  }
-
-  // Image: width * height * channels (derived from format)
-  if (layout.contains("width") && layout.contains("height")) {
-    const uint32_t w = layout.at("width").get<uint32_t>();
-    const uint32_t h = layout.at("height").get<uint32_t>();
-    uint32_t bpp = 0;
-    if (fmt == "rgba_uint8")     bpp = 4;
-    else if (fmt == "rgb_uint8")      bpp = 3;
-    else if (fmt == "depth_float32")  bpp = 4;  // one float32 per pixel
-    else if (fmt == "mono_uint8")     bpp = 1;
-    if (bpp > 0) return w * h * bpp;
   }
 
   return 0;
@@ -68,10 +65,7 @@ bool SensorRegistry::load(const std::string& json_str) {
       cfg.data_mode = (mode_str == "blob") ? DataMode::Blob : DataMode::ScalarFrame;
 
       if (cfg.data_mode == DataMode::Blob) {
-        if (!s.contains("blobLayout")) {
-          std::cerr << "[ROS2 WARN] SensorRegistry: blob sensor '" << cfg.id
-                    << "' has no 'blobLayout' - buffer will not be pre-allocated.\n";
-        } else {
+        if (s.contains("blobLayout")) {
           const auto& bl = s["blobLayout"];
           cfg.blob_layout.format       = bl.value("format",      "");
           cfg.blob_layout.width        = bl.value("width",        uint32_t{0});
@@ -83,6 +77,17 @@ bool SensorRegistry::load(const std::string& json_str) {
             std::cerr << "[ROS2 WARN] SensorRegistry: blob sensor '" << cfg.id
                       << "' blobLayout could not determine max_bytes "
                           "(check format, maxPoints/pointStride or width/height).\n";
+          }
+        } else {
+          // Fixed-size blob message types: pre-allocate without requiring blobLayout in JSON.
+          const std::string& mf = cfg.msg_file;
+          if (mf == "Range") {
+            cfg.blob_layout.max_bytes = 17u;  // radiation_type(1) + 4*float(16)
+          }
+          // Image: require blobLayout with width/height in JSON for camera
+          if (cfg.blob_layout.max_bytes == 0) {
+            std::cerr << "[ROS2 WARN] SensorRegistry: blob sensor '" << cfg.id
+                      << "' has no 'blobLayout' - buffer will not be pre-allocated.\n";
           }
         }
       }
