@@ -1,5 +1,6 @@
 #include "vehicle_node.h"
 #include "sensor_registry.h"
+#include <beamng_msgs/msg/vehicle_control.hpp>
 #include <geometry_msgs/msg/transform_stamped.hpp>
 #include <rclcpp/rclcpp.hpp>
 #include <tf2_geometry_msgs/tf2_geometry_msgs.hpp>
@@ -18,11 +19,42 @@ VehicleNode::VehicleNode(const std::string& name)
       last_image_shmem_publish_(std::chrono::steady_clock::now()) {
   tf_broadcaster_ = std::make_unique<tf2_ros::TransformBroadcaster>(*this);
   visualizer_ = create_publisher<visualization_msgs::msg::MarkerArray>("~/marker", 10);
+  control_sub_ = create_subscription<beamng_msgs::msg::VehicleControl>(
+      "~/control", 10, [this](const beamng_msgs::msg::VehicleControl::SharedPtr msg) {
+        control_callback(msg);
+      });
   // NOTE: init_sensor_publishers() must be called AFTER make_shared() returns.
 }
 
 VehicleNode::~VehicleNode() {
   stop_publish_thread();
+}
+
+void VehicleNode::control_callback(const beamng_msgs::msg::VehicleControl::SharedPtr msg) {
+  std::lock_guard<std::mutex> lock(control_mutex_);
+  last_control_.steering = msg->steering;
+  last_control_.throttle = msg->throttle;
+  last_control_.brake = msg->brake;
+  last_control_.parkingbrake = msg->parkingbrake;
+  last_control_.clutch = msg->clutch;
+  last_control_.gear = msg->gear;
+  last_control_time_ = std::chrono::steady_clock::now();
+}
+
+bool VehicleNode::get_control(double* steering, double* throttle, double* brake,
+                                double* parkingbrake, double* clutch, int8_t* gear,
+                                int timeout_ms) const {
+  std::lock_guard<std::mutex> lock(control_mutex_);
+  const auto now = std::chrono::steady_clock::now();
+  const auto elapsed = std::chrono::duration_cast<std::chrono::milliseconds>(now - last_control_time_).count();
+  if (elapsed > timeout_ms) return false;
+  if (steering) *steering = last_control_.steering;
+  if (throttle) *throttle = last_control_.throttle;
+  if (brake) *brake = last_control_.brake;
+  if (parkingbrake) *parkingbrake = last_control_.parkingbrake;
+  if (clutch) *clutch = last_control_.clutch;
+  if (gear) *gear = last_control_.gear;
+  return true;
 }
 
 void VehicleNode::init_sensor_publishers() {
@@ -482,6 +514,14 @@ BNG_ROS2_API void bngros2_handle_set_sensor_field_string(void* handle,
                                                           const char* value) {
   static_cast<bng_ros2::VehicleNode*>(handle)->set_sensor_field_string(
       sensor_id, field_name, value ? value : "");
+}
+
+BNG_ROS2_API char bngros2_handle_get_control(void* handle, double* steering, double* throttle,
+                                              double* brake, double* parkingbrake, double* clutch,
+                                              int8_t* gear) {
+  if (!handle) return 0;
+  return static_cast<char>(static_cast<bng_ros2::VehicleNode*>(handle)->get_control(
+      steering, throttle, brake, parkingbrake, clutch, gear, 300)); // 300ms timeout
 }
 
 BNG_ROS2_API void bngros2_broadcast_tf(uint32_t id, double pos[3], double rot[4]) {

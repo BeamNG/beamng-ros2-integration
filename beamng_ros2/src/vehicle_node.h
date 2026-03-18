@@ -19,7 +19,9 @@
 #include "shmem_reader.h"
 #include "spsc_double_buffer.h"
 #include "beamng_node.h"
+#include <beamng_msgs/msg/vehicle_control.hpp>
 #include <chrono>
+#include <mutex>
 
 namespace bng_ros2 {
 
@@ -105,8 +107,14 @@ class VehicleNode : public rclcpp::Node {
     // already be managed by a shared_ptr.
     void init_sensor_publishers();
 
+    // ROS control input: returns true if a control message was received within timeout_ms and fills the output pointers.
+    bool get_control(double* steering, double* throttle, double* brake,
+                      double* parkingbrake, double* clutch, int8_t* gear,
+                      int timeout_ms) const;
+
   private:
     void publish_loop();
+    void control_callback(const beamng_msgs::msg::VehicleControl::SharedPtr msg);
 
     std::string  name_;
     VehicleData  data_;
@@ -160,6 +168,19 @@ class VehicleNode : public rclcpp::Node {
     // Publish thread
     std::thread       publish_thread_;
     std::atomic<bool> running_{false};
+
+    // ROS vehicle control subscription: last received values and timestamp (read by Lua each physics step).
+    rclcpp::Subscription<beamng_msgs::msg::VehicleControl>::SharedPtr control_sub_;
+    struct {
+      double steering{0};
+      double throttle{0};
+      double brake{0};
+      double parkingbrake{0};
+      double clutch{0};
+      int8_t gear{0};
+    } last_control_;
+    std::chrono::steady_clock::time_point last_control_time_;
+    mutable std::mutex control_mutex_;
 };
 
 }  // namespace bng_ros2
@@ -179,6 +200,7 @@ BNG_ROS2_API void     bngros2_handle_push_frame(void* handle, const double* valu
 BNG_ROS2_API void     bngros2_handle_push_blobs_batch(void* handle, const BngBlobDesc* descs, uint32_t count);
 BNG_ROS2_API void     bngros2_handle_set_image_shmem(void* handle, uint32_t sensor_idx, const char* shmem_name, uint32_t width, uint32_t height);
 BNG_ROS2_API void     bngros2_handle_set_sensor_field_string(void* handle, const char* sensor_id, const char* field_name, const char* value);
+BNG_ROS2_API char     bngros2_handle_get_control(void* handle, double* steering, double* throttle, double* brake, double* parkingbrake, double* clutch, int8_t* gear);
 
 // Id-based setup functions - called once, map lookup cost is acceptable.
 BNG_ROS2_API void     bngros2_broadcast_tf(uint32_t id, double pos[3], double rot[4]);
