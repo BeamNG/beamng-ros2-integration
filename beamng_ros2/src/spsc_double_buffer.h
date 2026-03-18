@@ -1,5 +1,6 @@
 #pragma once
 #include <atomic>
+#include <chrono>
 #include <cstdint>
 #include <mutex>
 #include <condition_variable>
@@ -70,12 +71,10 @@ struct SpscDoubleBuffer {
   }
 
   // Reader side: returns true immediately if dirty, otherwise blocks until commit() is called or the timeout expires.
-  // max_wait_ms allows the publish thread to process other work (e.g. markers, spin_some) even with no sensor data.
-  bool wait_for_data(int max_wait_ms = 1) {
+  bool wait_for_data(std::chrono::microseconds max_wait = std::chrono::microseconds(500)) {
     if (state_.load(std::memory_order_acquire) & 2u) return true;
     std::unique_lock<std::mutex> lk(cv_mutex_);
-    cv_.wait_for(lk, std::chrono::milliseconds(max_wait_ms),
-                 [this]{ return (state_.load(std::memory_order_acquire) & 2u) != 0; });
+    cv_.wait_for(lk, max_wait, [this]{ return (state_.load(std::memory_order_acquire) & 2u) != 0; });
     return (state_.load(std::memory_order_acquire) & 2u) != 0;
   }
 

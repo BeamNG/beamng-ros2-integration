@@ -70,6 +70,14 @@ void VehicleNode::init_sensor_publishers() {
   uint32_t string_cursor = 0;
 
   for (const auto& sensor : registry.sensors()) {
+    std::string suffix = sensor.topic;
+    if (!suffix.empty() && suffix[0] == '/') suffix.erase(0, 1);
+    const std::string vehicle_prefix = "vehicle/";
+    if (suffix.size() >= vehicle_prefix.size() && suffix.compare(0, vehicle_prefix.size(), vehicle_prefix) == 0) {
+      suffix.erase(0, vehicle_prefix.size());
+    }
+    const std::string topic = "/beamng_bridge/" + name_ + "/" + suffix;
+
     if (sensor.data_mode == DataMode::Blob) {
       const BlobRegisterFn* factory = factory_reg.find_blob(sensor.msg_file);
       if (!factory) {
@@ -87,10 +95,10 @@ void VehicleNode::init_sensor_publishers() {
       }
 
       try {
-        slot.publish_fn = (*factory)(*this, sensor.topic, sensor);
+        slot.publish_fn = (*factory)(*this, topic, sensor);
         blob_sensor_index_[sensor.id] = static_cast<uint32_t>(blob_slots_.size() - 1);
         std::cout << "[ROS2 INFO] blob publisher: sensor '" << sensor.id
-                  << "' on '" << sensor.topic << "'\n";
+                  << "' on '" << topic << "'\n";
       } catch (const std::exception& e) {
         std::cerr << "[ROS2 ERROR] blob factory for sensor '" << sensor.id
                   << "': " << e.what() << "\n";
@@ -107,10 +115,10 @@ void VehicleNode::init_sensor_publishers() {
       }
 
       try {
-        auto result = (*sfac)(*this, sensor.topic, sensor, scalar_cursor, string_cursor);
+        auto result = (*sfac)(*this, topic, sensor, scalar_cursor, string_cursor);
         publish_fns_.push_back(std::move(result.publish_fn));
         std::cout << "[ROS2 INFO] scalar publisher: sensor '" << sensor.id
-                  << "' on '" << sensor.topic
+                  << "' on '" << topic
                   << "' scalar_base=" << scalar_cursor
                   << " slots=" << result.scalar_slots_used
                   << " string_slots=" << result.string_slots_used << "\n";
@@ -299,21 +307,22 @@ void VehicleNode::publish_loop() {
   // Rate limiter for the marker visualizer
   auto last_marker_publish = std::chrono::steady_clock::now();
   constexpr auto kMarkerInterval = std::chrono::milliseconds(100);
-  constexpr auto kImageShmemInterval = std::chrono::milliseconds(15);  // ~50 Hz
+  constexpr auto kImageShmemInterval = std::chrono::milliseconds(15);
+
+  // Max wait 500 us so the loop runs at 2000 Hz and TF (sent from physics thread) is flushed via spin_some every 0.5 ms.
+  constexpr auto kMaxWaitForTf = std::chrono::microseconds(500);
 
   while (running_.load(std::memory_order_relaxed)) {
 
-    // Dynamic wait: wake frequently when we have image slots so image is not delayed by scalar/blob/markers/spin_some.
-    // Cap sleep at 5 ms so we re-check in time for the next 20 ms image; otherwise one slow loop body would drop to 5-10 Hz.
     auto now_wait = std::chrono::steady_clock::now();
-    int wait_ms = 1;
+    auto wait_duration = kMaxWaitForTf;
     if (!image_shmem_slots_.empty()) {
       auto next_img = last_image_shmem_publish_ + kImageShmemInterval;
-      auto remaining_ms = std::chrono::duration_cast<std::chrono::milliseconds>(next_img - now_wait).count();
-      if (remaining_ms <= 0) wait_ms = 0;
-      else wait_ms = static_cast<int>(std::min(remaining_ms, static_cast<int64_t>(15)));
+      auto remaining = std::chrono::duration_cast<std::chrono::microseconds>(next_img - now_wait);
+      if (remaining <= std::chrono::microseconds(0)) wait_duration = std::chrono::microseconds(0);
+      else wait_duration = std::min(remaining, kMaxWaitForTf);
     }
-    const bool has_scalar = scalar_buf_.wait_for_data(wait_ms);
+    const bool has_scalar = scalar_buf_.wait_for_data(wait_duration);
 
     if (!running_.load(std::memory_order_relaxed)) break;
 
