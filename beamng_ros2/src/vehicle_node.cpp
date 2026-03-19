@@ -70,13 +70,7 @@ void VehicleNode::init_sensor_publishers() {
   uint32_t string_cursor = 0;
 
   for (const auto& sensor : registry.sensors()) {
-    std::string suffix = sensor.topic;
-    if (!suffix.empty() && suffix[0] == '/') suffix.erase(0, 1);
-    const std::string vehicle_prefix = "vehicle/";
-    if (suffix.size() >= vehicle_prefix.size() && suffix.compare(0, vehicle_prefix.size(), vehicle_prefix) == 0) {
-      suffix.erase(0, vehicle_prefix.size());
-    }
-    const std::string topic = "/beamng_bridge/" + name_ + "/" + suffix;
+    const std::string topic = "/beamng_bridge/" + name_ + "/" + sensor.id;
 
     if (sensor.data_mode == DataMode::Blob) {
       const BlobRegisterFn* factory = factory_reg.find_blob(sensor.msg_file);

@@ -57,7 +57,6 @@ bool SensorRegistry::load(const std::string& json_str) {
     for (const auto& s : root["sensors"]) {
       SensorConfig cfg;
       cfg.id       = s.at("id").get<std::string>();
-      cfg.topic    = s.at("topic").get<std::string>();
       cfg.msg_file = s.at("msgFile").get<std::string>();
       cfg.frame_id = s.value("frameId", "");
 

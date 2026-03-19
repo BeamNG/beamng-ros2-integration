@@ -28,7 +28,6 @@ struct BlobLayout {
 
 struct SensorConfig {
   std::string id;
-  std::string topic;
   std::string msg_file;
   std::string frame_id;  // ROS frame_id for the message header; empty = use node name
   DataMode    data_mode{DataMode::ScalarFrame};
@@ -43,7 +42,7 @@ class SensorRegistry {
     static SensorRegistry& instance();
 
     // Parse the JSON config string and populate the sensor list.
-    // Expected format: { "sensors": [ { "id", "topic", "msgFile", "dataMode", "blobLayout": {...}, "fields": [...] } ] }
+    // Expected format: { "sensors": [ { "id", "msgFile", "dataMode", "blobLayout": {...}, "fields": [...] } ] }
     bool load(const std::string& json);
 
     const std::vector<SensorConfig>& sensors() const { return sensors_; }
