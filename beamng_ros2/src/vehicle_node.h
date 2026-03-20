@@ -101,6 +101,7 @@ class VehicleNode : public rclcpp::Node {
     // Called from the C API init/destroy functions.
     void start_publish_thread();
     void stop_publish_thread();
+    void prepare_destroy();
 
     // Must be called once after make_shared (not from the constructor) because
     // scalar factories capture shared_from_this(), which requires the object to

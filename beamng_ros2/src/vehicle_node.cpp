@@ -30,6 +30,22 @@ VehicleNode::~VehicleNode() {
   stop_publish_thread();
 }
 
+void VehicleNode::prepare_destroy() {
+  stop_publish_thread();
+  publish_fns_.clear();
+  for (auto& slot : blob_slots_) {
+    slot.publish_fn = nullptr;
+  }
+  blob_slots_.clear();
+  blob_sensor_index_.clear();
+  image_shmem_slots_.clear();
+  image_shmem_slot_order_.clear();
+  control_sub_.reset();
+  visualizer_.reset();
+  tf_broadcaster_.reset();
+  self_ptr_.reset();
+}
+
 void VehicleNode::control_callback(const beamng_msgs::msg::VehicleControl::SharedPtr msg) {
   std::lock_guard<std::mutex> lock(control_mutex_);
   last_control_.steering = msg->steering;
@@ -461,7 +477,7 @@ BNG_ROS2_API void bngros2_destroy_vehicle_node(uint32_t id) {
   try {
     auto it = nodes.find(id);
     if (it != nodes.end()) {
-      it->second->stop_publish_thread();
+      it->second->prepare_destroy();
       nodes.erase(it);
     }
   } catch (std::exception& e) {
@@ -471,7 +487,7 @@ BNG_ROS2_API void bngros2_destroy_vehicle_node(uint32_t id) {
 
 BNG_ROS2_API void bngros2_destroy_all_vehicle_nodes() {
   try {
-    for (auto& [id, node] : nodes) node->stop_publish_thread();
+    for (auto& [id, node] : nodes) node->prepare_destroy();
     nodes.clear();
   } catch (std::exception& e) {
     std::cerr << "[ROS2 ERROR] " << e.what() << "\n";
