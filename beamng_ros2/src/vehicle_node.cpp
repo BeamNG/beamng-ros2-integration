@@ -198,10 +198,9 @@ uint32_t VehicleNode::register_frame_layout(const char* const* sensor_ids,
 
 void VehicleNode::push_frame(const double* values, uint32_t count) {
   const uint32_t n = std::min(count, static_cast<uint32_t>(frame_layout_.size()));
+  if (n == 0) return;
   ScalarStore& ws = scalar_buf_.write_slot();
-  for (uint32_t i = 0; i < n; ++i) {
-    ws[frame_layout_[i]] = values[i];
-  }
+  std::memcpy(ws.data(), values, static_cast<size_t>(n) * sizeof(double));
   scalar_buf_.commit();
 }
 
@@ -319,8 +318,24 @@ void VehicleNode::publish_loop() {
   constexpr auto kMarkerInterval = std::chrono::milliseconds(100);
   constexpr auto kImageShmemInterval = std::chrono::milliseconds(15);
 
-  // Max wait 500 us so the loop runs at 2000 Hz and TF (sent from physics thread) is flushed via spin_some every 0.5 ms.
+  // Max wait when idle
   constexpr auto kMaxWaitForTf = std::chrono::microseconds(500);
+
+  constexpr auto kMinSpinSomeInterval = std::chrono::milliseconds(2);
+  auto last_spin_some = std::chrono::steady_clock::now() - kMinSpinSomeInterval;
+  // Cap drain iterations so a bad producer cannot starve blob/image/spin work forever.
+  constexpr int kMaxScalarDrainPerLoop = 128;
+
+  auto publish_pending_scalars = [this] {
+    if (!scalar_buf_.is_dirty()) return;
+    scalar_buf_.clear_dirty();
+    const ScalarStore& scalars = scalar_buf_.read_slot();
+    const StringStore& strings = string_buf_.read_slot();
+    const rclcpp::Time stamp = get_clock()->now();
+    for (auto& fn : publish_fns_) {
+      fn(scalars, strings, stamp);
+    }
+  };
 
   while (running_.load(std::memory_order_relaxed)) {
 
@@ -332,15 +347,21 @@ void VehicleNode::publish_loop() {
       if (remaining <= std::chrono::microseconds(0)) wait_duration = std::chrono::microseconds(0);
       else wait_duration = std::min(remaining, kMaxWaitForTf);
     }
-    const bool has_scalar = scalar_buf_.wait_for_data(wait_duration);
+    scalar_buf_.wait_for_data(wait_duration);
 
     if (!running_.load(std::memory_order_relaxed)) break;
 
-    // Image from shmem first so we never delay it with scalar/blob work; keeps steady ~50 Hz.
+    // Scalar topics before camera because RGB conversion can take milliseconds; publishing scalars first
+    // Keeps physics-rate scalar topics from collapsing in the double buffer.
+    for (int drain = 0; drain < kMaxScalarDrainPerLoop && scalar_buf_.is_dirty(); ++drain) {
+      publish_pending_scalars();
+    }
+
     if (!image_shmem_slots_.empty()) {
       const auto now_img = std::chrono::steady_clock::now();
       if (now_img - last_image_shmem_publish_ >= kImageShmemInterval) {
         last_image_shmem_publish_ = now_img;
+        // ROS time for header, capture time from sim would require engine metadata in shmem.
         const int64_t ts_ns = get_clock()->now().nanoseconds();
         for (uint32_t slot_idx : image_shmem_slot_order_) {
           auto it = image_shmem_slots_.find(slot_idx);
@@ -349,35 +370,19 @@ void VehicleNode::publish_loop() {
           if (!img.reader.is_open() || img.n_pixels == 0) continue;
           const uint8_t* src = img.reader.data();
           uint8_t* dst = img.rgb_buffer.data();
-          const uint32_t w = img.width;
-          const uint32_t h = img.height;
-          for (uint32_t y = 0; y < h; ++y) {
-            const uint8_t* row_src = src + y * w * 4u;
-            uint8_t* row_dst = dst + y * w * 3u;
-            uint32_t x = 0;
-            for (; x + 4 <= w; x += 4) {
-              row_dst[0] = row_src[0];  row_dst[1] = row_src[1];  row_dst[2] = row_src[2];  row_src += 4; row_dst += 3;
-              row_dst[0] = row_src[0];  row_dst[1] = row_src[1];  row_dst[2] = row_src[2];  row_src += 4; row_dst += 3;
-              row_dst[0] = row_src[0];  row_dst[1] = row_src[1];  row_dst[2] = row_src[2];  row_src += 4; row_dst += 3;
-              row_dst[0] = row_src[0];  row_dst[1] = row_src[1];  row_dst[2] = row_src[2];  row_src += 4; row_dst += 3;
-            }
-            for (; x < w; ++x) {
-              row_dst[0] = row_src[0];  row_dst[1] = row_src[1];  row_dst[2] = row_src[2];
-              row_src += 4; row_dst += 3;
-            }
+          const size_t n = img.n_pixels;
+          for (size_t i = 0; i < n; ++i) {
+            dst[i * 3 + 0] = src[i * 4 + 0];
+            dst[i * 3 + 1] = src[i * 4 + 1];
+            dst[i * 3 + 2] = src[i * 4 + 2];
           }
           blob_slots_[slot_idx].publish_fn(img.rgb_buffer.data(), static_cast<uint32_t>(img.rgb_len), static_cast<uint64_t>(ts_ns));
         }
       }
     }
 
-    if (has_scalar) {
-      scalar_buf_.clear_dirty();
-      const ScalarStore& scalars = scalar_buf_.read_slot();
-      const StringStore& strings = string_buf_.read_slot();
-      for (auto& fn : publish_fns_) {
-        fn(scalars, strings);
-      }
+    for (int drain = 0; drain < kMaxScalarDrainPerLoop && scalar_buf_.is_dirty(); ++drain) {
+      publish_pending_scalars();
     }
 
     // Drain all dirty blob slots (non-image; image slots are published from shmem above).
@@ -442,9 +447,12 @@ void VehicleNode::publish_loop() {
       }
     }
 
-    // ROS2 executor work (subscriptions, services, etc.)
-    // self_ptr_ is cached once at init to avoid a shared_ptr copy (atomic refcount) here.
-    rclcpp::spin_some(self_ptr_);
+    // ROS2 executor (subscriptions, e.g. ~/control). Must not run every loop iteration at physics rate.
+    const auto now_spin = std::chrono::steady_clock::now();
+    if (now_spin - last_spin_some >= kMinSpinSomeInterval) {
+      last_spin_some = now_spin;
+      rclcpp::spin_some(self_ptr_);
+    }
   }
 }
 

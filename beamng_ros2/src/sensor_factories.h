@@ -16,7 +16,9 @@ using StringStore = std::vector<std::string>;
 
 // Scalar sensor publish function.
 // Called by the publish thread with the stable read-slot of the SPSC buffer.
-using PublishFn = std::function<void(const ScalarStore&, const StringStore&)>;
+// stamp: one get_clock()->now() per batch (all messages in this drain share it).
+using PublishFn =
+    std::function<void(const ScalarStore&, const StringStore&, const rclcpp::Time& stamp)>;
 
 // Blob sensor publish function.
 // Called by the publish thread with a pointer into the stable read-slot and the number of valid bytes.

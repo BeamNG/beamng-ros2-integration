@@ -182,8 +182,6 @@ static ScalarRegisterResult make_generic_factory(
   }
 
   auto pub = node.create_publisher<MsgT>(topic, 10);
-  // Capture node as shared_ptr so the lambda never holds a dangling reference.
-  auto node_ptr  = node.shared_from_this();
   const std::string frame_id = sensor_cfg.frame_id.empty()
       ? std::string(node.get_name()) : sensor_cfg.frame_id;
 
@@ -192,13 +190,13 @@ static ScalarRegisterResult make_generic_factory(
   const uint32_t expected_scalar_slots = scalar_base_idx + scalar_local_idx;
   const uint32_t expected_string_slots = string_base_idx + string_local_idx;
 
-  PublishFn fn = [pub, node_ptr, frame_id, writers = std::move(writers),
+  PublishFn fn = [pub, frame_id, writers = std::move(writers),
                   expected_scalar_slots, expected_string_slots](
-      const ScalarStore& scalars, const StringStore& strings)
+      const ScalarStore& scalars, const StringStore& strings, const rclcpp::Time& stamp)
   {
     MsgT msg;
     if constexpr (has_header<MsgT>::value) {
-      msg.header.stamp    = node_ptr->get_clock()->now();
+      msg.header.stamp    = stamp;
       msg.header.frame_id = frame_id;
     }
 
