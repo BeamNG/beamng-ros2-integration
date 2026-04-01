@@ -70,6 +70,21 @@ bool SensorRegistry::load(const std::string& json_str) {
           cfg.blob_layout.width        = bl.value("width",        uint32_t{0});
           cfg.blob_layout.height       = bl.value("height",       uint32_t{0});
           cfg.blob_layout.point_stride = bl.value("pointStride",  uint32_t{0});
+          cfg.blob_layout.publish_mode = bl.value("publishMode", std::string{});
+          cfg.blob_layout.publish_rate_hz = bl.value("publishRateHz", 0.0);
+
+          if (bl.contains("streams") && bl["streams"].is_array()) {
+            for (const auto& st : bl["streams"]) {
+              ImageStreamSpec spec;
+              spec.id       = st.value("id", std::string{});
+              spec.encoding = st.value("encoding", std::string{"rgb8"});
+              spec.role     = st.value("role", std::string{});
+              if (!spec.id.empty()) {
+                cfg.blob_layout.image_streams.push_back(std::move(spec));
+              }
+            }
+          }
+
           cfg.blob_layout.max_bytes    = compute_max_bytes(bl);
 
           if (cfg.blob_layout.max_bytes == 0) {

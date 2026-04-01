@@ -773,35 +773,43 @@ static BlobPublishFn make_range_factory(
   };
 }
 
-// Wire format for Camera (Image): raw rgb8 pixel data; width/height/step from blob_layout.
-// Pre-allocate msg.data to avoid per-publish realloc; skip publish when len==0 (rate-limited skip).
-static BlobPublishFn make_image_factory(
+static uint32_t image_row_step_bytes(const std::string& encoding, uint32_t width) {
+  if (encoding == "rgb8" || encoding == "bgr8") return width * 3u;
+  if (encoding == "32FC1" || encoding == "32SC1" || encoding == "rgba8") return width * 4u;
+  if (encoding == "mono8" || encoding == "8UC1") return width;
+  return width * 3u;
+}
+
+// Payload is already in ROS row layout; VehicleNode converts engine shmem where needed.
+BlobPublishFn make_camera_sensor_factory(
     rclcpp::Node& node,
     const std::string& topic,
-    const SensorConfig& cfg)
+    const SensorConfig& cfg,
+    const std::string& encoding,
+    uint32_t width,
+    uint32_t height)
 {
   using sensor_msgs::msg::Image;
 
   auto pub = node.create_publisher<Image>(topic, 10);
   const std::string frame_id = cfg.frame_id.empty() ? std::string(node.get_name()) : cfg.frame_id;
-  const uint32_t width  = cfg.blob_layout.width > 0  ? cfg.blob_layout.width  : 512u;
-  const uint32_t height = cfg.blob_layout.height > 0 ? cfg.blob_layout.height : 512u;
-  const uint32_t step  = width * 3u;  // rgb8
-  const uint32_t max_bytes = (cfg.blob_layout.max_bytes > 0) ? cfg.blob_layout.max_bytes : (width * height * 3u);
+
+  const uint32_t step = image_row_step_bytes(encoding, width);
+  const uint32_t max_bytes = step * height;
 
   Image tmpl;
   tmpl.header.frame_id = frame_id;
   tmpl.height          = height;
   tmpl.width           = width;
-  tmpl.encoding        = "rgb8";
+  tmpl.encoding        = encoding;
   tmpl.is_bigendian    = 0;
   tmpl.step            = step;
-  tmpl.data.resize(max_bytes);  // fixed size once; no per-publish resize for constant resolution
+  tmpl.data.resize(max_bytes);
 
   return [pub, msg = std::move(tmpl)](
       const uint8_t* data, uint32_t len, uint64_t ts_ns) mutable
   {
-    if (len == 0) return;  // rate-limited skip or no data
+    if (len == 0) return;
     msg.header.stamp = rclcpp::Time(static_cast<int64_t>(ts_ns));
     if (msg.data.size() != len) msg.data.resize(len);
     std::memcpy(msg.data.data(), data, len);
@@ -894,7 +902,7 @@ void register_all_sensor_factories() {
   reg.register_blob_factory("IdealRadarSensor",  make_ideal_radar_factory);
   reg.register_blob_factory("MeshSensor",      make_mesh_sensor_factory);
   reg.register_blob_factory("Range",           make_range_factory);
-  reg.register_blob_factory("Image",           make_image_factory);
+  // Image (camera): created in VehicleNode::init_sensor_publishers : multi-stream + shmem.
 }
 
 }  // namespace bng_ros2

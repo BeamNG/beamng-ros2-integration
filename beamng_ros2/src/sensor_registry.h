@@ -18,12 +18,22 @@ enum class DataMode {
   Blob,         // Blob: raw binary buffer pushed each GFX step
 };
 
+// One sensor_msgs/Image publisher per entry. Populated from blobLayout.streams in JSON.
+struct ImageStreamSpec {
+  std::string id;        // topic suffix: /vehicle_X/sensorId_<id>
+  std::string encoding;  // sensor_msgs/Image encoding: rgb8, 32FC1, 32SC1, ...
+  std::string role;      // colour | depth | annotation | instance — conversion in VehicleNode
+};
+
 struct BlobLayout {
   std::string format;          // "xyz_float32", "rgba_uint8", "depth_float32", "rgb_uint8"
   uint32_t    width{0};        // image width in pixels (images only)
   uint32_t    height{0};       // image height in pixels (images only)
   uint32_t    point_stride{0}; // bytes per point (point clouds only)
   uint32_t    max_bytes{0};    // pre-computed at load time; 0 = unknown/unbounded
+  std::vector<ImageStreamSpec> image_streams;  // camera only; empty means single rgb8 stream in VehicleNode
+  std::string publish_mode;    // "fixed" throttles ROS publish rate; otherwise unthrottled
+  double      publish_rate_hz{0};
 };
 
 struct SensorConfig {

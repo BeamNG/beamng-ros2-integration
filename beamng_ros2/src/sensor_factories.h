@@ -68,4 +68,13 @@ class SensorFactoryRegistry {
 // Called once at DLL load time from init.cpp.
 void register_all_sensor_factories();
 
+// sensor_msgs/Image publisher factory; VehicleNode calls this per camera stream (not via blob registry).
+BlobPublishFn make_camera_sensor_factory(
+    rclcpp::Node& node,
+    const std::string& topic,
+    const SensorConfig& cfg,
+    const std::string& encoding,
+    uint32_t width,
+    uint32_t height);
+
 }  // namespace bng_ros2

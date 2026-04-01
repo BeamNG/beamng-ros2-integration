@@ -23,6 +23,14 @@
 #include <chrono>
 #include <mutex>
 
+// FFI: one entry per camera stream; stream_index matches CameraSlot.streams order from init.
+typedef struct BngCameraStreamDesc {
+  const char* shmem_name;
+  uint32_t    width;
+  uint32_t    height;
+  uint32_t    stream_index;
+} BngCameraStreamDesc;
+
 namespace bng_ros2 {
 
 struct VehicleData {
@@ -94,9 +102,10 @@ class VehicleNode : public rclcpp::Node {
     // Batching the commits prevents the publish thread from seeing a partial blob update.
     void push_blobs_batch(const BngBlobDesc* descs, uint32_t count);
 
-    // Image from shared memory : open named shmem for this blob slot so the
-    // publish loop reads RGBA from shmem, converts to RGB, and publishes. Called once per camera after register_blob_sensors.
-    void set_image_shmem(uint32_t sensor_idx, const std::string& shmem_name, uint32_t width, uint32_t height);
+    // Binds named shared memory regions to camera streams; stream_index matches registration order in init_sensor_publishers.
+    void set_camera_streams(uint32_t sensor_idx,
+                            const ::BngCameraStreamDesc* streams,
+                            uint32_t count);
 
     // Called from the C API init/destroy functions.
     void start_publish_thread();
@@ -132,7 +141,7 @@ class VehicleNode : public rclcpp::Node {
     SpscDoubleBuffer<StringStore> string_buf_;
     // frame_layout_[i] = index into ScalarStore for the i-th Lua frame slot.
     std::vector<uint32_t> frame_layout_;
-    // Maps "sensor_id::field_name" → index in StringStore.
+    // Maps "sensor_id::field_name" to index in StringStore.
     std::unordered_map<std::string, uint32_t> string_field_index_;
     // PublishFn vector in sensor registration order; called by publish_loop.
     std::vector<PublishFn> publish_fns_;
@@ -141,18 +150,21 @@ class VehicleNode : public rclcpp::Node {
     std::unordered_map<std::string, uint32_t> blob_sensor_index_;
     std::vector<BlobSlot>                     blob_slots_;
 
-    // Image sensors that read from engine shared memory (beamngpy workflow).
-    struct ImageShmemSlot {
+    // One CameraSlot per blob slot index for msgFile Image; Lua opens shmem via set_camera_streams.
+    struct CameraShmemStream {
       ShmemReader reader;
       uint32_t width{0};
       uint32_t height{0};
-      size_t n_pixels{0};   // cached width * height, set once at init
-      size_t rgb_len{0};    // cached n_pixels * 3, set once at init
-      std::vector<uint8_t> rgb_buffer;  // RGBA -> RGB conversion target (w*h*3)
+      std::string role;
+      BlobPublishFn publish_fn;
+      std::vector<uint8_t> convert_buf;
     };
-    std::unordered_map<uint32_t, ImageShmemSlot> image_shmem_slots_;
-    std::vector<uint32_t> image_shmem_slot_order_;  // cache for fast iteration (set in set_image_shmem)
-    std::chrono::steady_clock::time_point last_image_shmem_publish_;
+    struct CameraSlot {
+      std::vector<CameraShmemStream> streams;
+      std::chrono::nanoseconds min_publish_interval{0};
+      std::chrono::steady_clock::time_point last_publish{std::chrono::steady_clock::now()};
+    };
+    std::unordered_map<uint32_t, CameraSlot> camera_slots_;
 
     // Marker visualizer
     visualization_msgs::msg::MarkerArray marker_array_;
@@ -199,7 +211,8 @@ BNG_ROS2_API void*    bngros2_get_vehicle_handle(uint32_t id);
 BNG_ROS2_API void     bngros2_handle_broadcast_tf(void* handle, double pos[3], double rot[4]);
 BNG_ROS2_API void     bngros2_handle_push_frame(void* handle, const double* values, uint32_t count);
 BNG_ROS2_API void     bngros2_handle_push_blobs_batch(void* handle, const BngBlobDesc* descs, uint32_t count);
-BNG_ROS2_API void     bngros2_handle_set_image_shmem(void* handle, uint32_t sensor_idx, const char* shmem_name, uint32_t width, uint32_t height);
+BNG_ROS2_API void     bngros2_handle_set_camera_streams(void* handle, uint32_t sensor_idx,
+                                                        const BngCameraStreamDesc* streams, uint32_t count);
 BNG_ROS2_API void     bngros2_handle_set_sensor_field_string(void* handle, const char* sensor_id, const char* field_name, const char* value);
 BNG_ROS2_API char     bngros2_handle_get_control(void* handle, double* steering, double* throttle, double* brake, double* parkingbrake, double* clutch, int8_t* gear);
 
