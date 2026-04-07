@@ -46,6 +46,7 @@ struct BlobSlot {
   std::atomic<uint64_t>                 timestamp_ns{0};
   std::atomic<uint32_t>                 actual_byte_len{0};
   BlobPublishFn                         publish_fn;
+  uint32_t                              max_blob_bytes{0};
 
   BlobSlot() = default;
 
@@ -53,7 +54,8 @@ struct BlobSlot {
       : buf{std::move(o.buf)},
         timestamp_ns{o.timestamp_ns.load(std::memory_order_relaxed)},
         actual_byte_len{o.actual_byte_len.load(std::memory_order_relaxed)},
-        publish_fn{std::move(o.publish_fn)} {}
+        publish_fn{std::move(o.publish_fn)},
+        max_blob_bytes{o.max_blob_bytes} {}
 
   BlobSlot& operator=(BlobSlot&& o) noexcept {
     if (this != &o) {
@@ -63,6 +65,7 @@ struct BlobSlot {
       actual_byte_len.store(o.actual_byte_len.load(std::memory_order_relaxed),
                             std::memory_order_relaxed);
       publish_fn = std::move(o.publish_fn);
+      max_blob_bytes = o.max_blob_bytes;
     }
     return *this;
   }

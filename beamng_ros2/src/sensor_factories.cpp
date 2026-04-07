@@ -465,14 +465,16 @@ static BlobPublishFn make_radar_scan_factory(
   using beamng_msgs::msg::RadarScan;
   using beamng_msgs::msg::RadarReturn;
 
-  auto pub      = node.create_publisher<RadarScan>(topic, 10);
-  auto node_ptr = node.shared_from_this();
+  auto pub = node.create_publisher<RadarScan>(topic, 10);
   const std::string frame_id = cfg.frame_id.empty() ? std::string(node.get_name()) : cfg.frame_id;
 
   static constexpr uint32_t RETURN_STRIDE = 7 * sizeof(float);  // 28 bytes
+  static_assert(sizeof(RadarReturn) == RETURN_STRIDE,
+                "RadarReturn must match wire layout (7xfloat32, no padding) for bulk memcpy");
+  static_assert(std::is_trivially_copyable_v<RadarReturn>,
+                "RadarReturn must be memcpy-safe");
 
-  // Pre-allocate the message and size the returns vector to max capacity once.
-  // On each publish we only resize to the actual count (no-op if unchanged) and memcpy directly into each RadarReturn, avoiding per-call heap allocation.
+  // Pre-size the sequence once, publish path only adjusts length and copies wire bytes.
   const uint32_t max_returns = cfg.blob_layout.max_bytes > 0
       ? cfg.blob_layout.max_bytes / RETURN_STRIDE : 1000u;
 
@@ -480,28 +482,18 @@ static BlobPublishFn make_radar_scan_factory(
   tmpl.header.frame_id = frame_id;
   tmpl.returns.reserve(max_returns);
 
-  return [pub, node_ptr, msg = std::move(tmpl)](
+  return [pub, msg = std::move(tmpl), max_returns](
       const uint8_t* data, uint32_t len, uint64_t ts_ns) mutable
   {
     const uint32_t count = len / RETURN_STRIDE;
+    if (count == 0) {
+      return;
+    }
+    const uint32_t use_count = (count > max_returns) ? max_returns : count;
 
     msg.header.stamp = rclcpp::Time(static_cast<int64_t>(ts_ns));
-    msg.returns.resize(count);
-
-    // Cast the wire buffer directly into each RadarReturn's fields.
-    // RadarReturn contains 7 consecutive float32 members which are laid out identically to the wire format, so a single memcpy per return suffices.
-    const float* src = reinterpret_cast<const float*>(data);
-    for (uint32_t i = 0; i < count; ++i) {
-      auto& r = msg.returns[i];
-      const float* p = src + i * 7;
-      r.range                 = p[0];
-      r.doppler_velocity      = p[1];
-      r.azimuth               = p[2];
-      r.elevation             = p[3];
-      r.radar_cross_section   = p[4];
-      r.signal_to_noise_ratio = p[5];
-      r.facing_factor         = p[6];
-    }
+    msg.returns.resize(use_count);
+    std::memcpy(msg.returns.data(), data, static_cast<size_t>(use_count) * RETURN_STRIDE);
 
     pub->publish(msg);
   };

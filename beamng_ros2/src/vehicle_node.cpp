@@ -125,6 +125,7 @@ void VehicleNode::init_sensor_publishers() {
         BlobSlot& slot = blob_slots_.back();
         const uint32_t max_bytes = sensor.blob_layout.max_bytes;
         if (max_bytes > 0) {
+          slot.max_blob_bytes = max_bytes;
           slot.buf.slot[0].resize(max_bytes);
           slot.buf.slot[1].resize(max_bytes);
         }
@@ -184,6 +185,7 @@ void VehicleNode::init_sensor_publishers() {
       BlobSlot& slot = blob_slots_.back();
       const uint32_t max_bytes = sensor.blob_layout.max_bytes;
       if (max_bytes > 0) {
+        slot.max_blob_bytes = max_bytes;
         slot.buf.slot[0].resize(max_bytes);
         slot.buf.slot[1].resize(max_bytes);
       }
@@ -343,12 +345,21 @@ void VehicleNode::push_blobs_batch(const BngBlobDesc* descs, uint32_t count) {
     if (d.sensor_idx >= blob_slots_.size()) continue;
     BlobSlot& slot = blob_slots_[d.sensor_idx];
 
+    if (d.data == nullptr) continue;
+
+    uint32_t payload = d.byte_len;
+    if (slot.max_blob_bytes > 0 && payload > slot.max_blob_bytes) {
+      payload = slot.max_blob_bytes;
+    }
+
     std::vector<uint8_t>& ws = slot.buf.write_slot();
     // Grow only if payload exceeds pre-allocated capacity (should not happen in normal use).
-    if (d.byte_len > ws.size()) ws.resize(d.byte_len);
-    std::memcpy(ws.data(), d.data, d.byte_len);
+    if (payload > ws.size()) ws.resize(payload);
+    if (payload > 0) {
+      std::memcpy(ws.data(), d.data, payload);
+    }
     slot.timestamp_ns.store(d.timestamp_ns, std::memory_order_relaxed);
-    slot.actual_byte_len.store(d.byte_len, std::memory_order_relaxed);
+    slot.actual_byte_len.store(payload, std::memory_order_relaxed);
   }
   // Commit all written slots after all memcpys are done.
   for (uint32_t i = 0; i < count; ++i) {

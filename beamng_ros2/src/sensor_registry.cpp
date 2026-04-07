@@ -14,6 +14,19 @@ SensorRegistry& SensorRegistry::instance() {
 static uint32_t compute_max_bytes(const nlohmann::json& layout) {
   if (!layout.is_object()) return 0;
 
+  // maxPoints-driven layouts first so Radar/LiDAR are not mis-sized as images when
+  if (layout.contains("maxPoints")) {
+    uint32_t stride = layout.value("pointStride", uint32_t{0});
+    if (stride == 0) {
+      const std::string fmt = layout.value("format", "");
+      if (fmt == "radar_returns_f32") stride = 28u;
+      else if (fmt == "xyz_float32") stride = 12u;
+    }
+    if (stride > 0) {
+      return layout.at("maxPoints").get<uint32_t>() * stride;
+    }
+  }
+
   // Image: width * height * bytes_per_pixel (3 for rgb8)
   if (layout.contains("width") && layout.contains("height")) {
     const uint32_t w = layout.at("width").get<uint32_t>();
@@ -25,7 +38,7 @@ static uint32_t compute_max_bytes(const nlohmann::json& layout) {
     return w * h * 3u;
   }
 
-  // Point cloud: maxPoints * pointStride
+  // Point cloud: maxPoints * pointStride (both explicit)
   if (layout.contains("maxPoints") && layout.contains("pointStride")) {
     const uint32_t pts    = layout.at("maxPoints").get<uint32_t>();
     const uint32_t stride = layout.at("pointStride").get<uint32_t>();
