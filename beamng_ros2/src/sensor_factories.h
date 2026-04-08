@@ -17,14 +17,11 @@ using StringStore = std::vector<std::string>;
 // Scalar sensor publish function.
 // Called by the publish thread with the stable read-slot of the SPSC buffer.
 // stamp: one get_clock()->now() per batch (all messages in this drain share it).
-using PublishFn =
-    std::function<void(const ScalarStore&, const StringStore&, const rclcpp::Time& stamp)>;
+using PublishFn = std::function<void(const ScalarStore&, const StringStore&, const rclcpp::Time& stamp)>;
 
 // Blob sensor publish function.
 // Called by the publish thread with a pointer into the stable read-slot and the number of valid bytes.
-using BlobPublishFn = std::function<void(const uint8_t* data,
-                                         uint32_t       len,
-                                         uint64_t       ts_ns)>;
+using BlobPublishFn = std::function<void(const uint8_t* data, uint32_t len, uint64_t timestamp_ns)>;
 
 // RegisterFn creates a ROS2 publisher and returns a ScalarRegisterResult containing the PublishFn
 // and the exact number of scalar/string slots consumed from ScalarStore/StringStore.
@@ -43,10 +40,7 @@ using RegisterFn = std::function<ScalarRegisterResult(
     uint32_t scalar_base_idx,
     uint32_t string_base_idx)>;
 
-using BlobRegisterFn = std::function<BlobPublishFn(
-    rclcpp::Node&,
-    const std::string& topic,
-    const SensorConfig&)>;
+using BlobRegisterFn = std::function<BlobPublishFn(rclcpp::Node&, const std::string& topic, const SensorConfig&)>;
 
 class SensorFactoryRegistry {
   public:
@@ -72,7 +66,7 @@ void register_all_sensor_factories();
 BlobPublishFn make_camera_sensor_factory(
     rclcpp::Node& node,
     const std::string& topic,
-    const SensorConfig& cfg,
+    const SensorConfig& sensor_config,
     const std::string& encoding,
     uint32_t width,
     uint32_t height);

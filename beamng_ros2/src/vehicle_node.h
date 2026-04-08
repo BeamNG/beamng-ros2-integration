@@ -42,7 +42,7 @@ struct VehicleData {
 // One blob slot per Blob sensor.
 // Both buffer slots are pre-sized to cfg.blob_layout.max_bytes at init time.
 struct BlobSlot {
-  SpscDoubleBuffer<std::vector<uint8_t>> buf;
+  SpscDoubleBuffer<std::vector<uint8_t>> buffer;
   std::atomic<uint64_t>                 timestamp_ns{0};
   std::atomic<uint32_t>                 actual_byte_len{0};
   BlobPublishFn                         publish_fn;
@@ -50,27 +50,24 @@ struct BlobSlot {
 
   BlobSlot() = default;
 
-  BlobSlot(BlobSlot&& o) noexcept
-      : buf{std::move(o.buf)},
-        timestamp_ns{o.timestamp_ns.load(std::memory_order_relaxed)},
-        actual_byte_len{o.actual_byte_len.load(std::memory_order_relaxed)},
-        publish_fn{std::move(o.publish_fn)},
-        max_blob_bytes{o.max_blob_bytes} {}
+  BlobSlot(BlobSlot&& other) noexcept : buffer{std::move(other.buffer)},
+    timestamp_ns{other.timestamp_ns.load(std::memory_order_relaxed)},
+    actual_byte_len{other.actual_byte_len.load(std::memory_order_relaxed)},
+    publish_fn{std::move(other.publish_fn)},
+    max_blob_bytes{other.max_blob_bytes} {}
 
-  BlobSlot& operator=(BlobSlot&& o) noexcept {
-    if (this != &o) {
-      buf        = std::move(o.buf);
-      timestamp_ns.store(o.timestamp_ns.load(std::memory_order_relaxed),
-                          std::memory_order_relaxed);
-      actual_byte_len.store(o.actual_byte_len.load(std::memory_order_relaxed),
-                            std::memory_order_relaxed);
-      publish_fn = std::move(o.publish_fn);
-      max_blob_bytes = o.max_blob_bytes;
+  BlobSlot& operator=(BlobSlot&& other) noexcept {
+    if (this != &other) {
+      buffer = std::move(other.buffer);
+      timestamp_ns.store(other.timestamp_ns.load(std::memory_order_relaxed), std::memory_order_relaxed);
+      actual_byte_len.store(other.actual_byte_len.load(std::memory_order_relaxed), std::memory_order_relaxed);
+      publish_fn = std::move(other.publish_fn);
+      max_blob_bytes = other.max_blob_bytes;
     }
     return *this;
   }
 
-  BlobSlot(const BlobSlot&)            = delete;
+  BlobSlot(const BlobSlot&) = delete;
   BlobSlot& operator=(const BlobSlot&) = delete;
 };
 
@@ -85,17 +82,13 @@ class VehicleNode : public rclcpp::Node {
     // Scalar path - registers the ordered mapping between Lua frame buffer positions
     // and their destination indices in the flat ScalarStore. Called once after construction.
     // Returns the number of slots registered.
-    uint32_t register_frame_layout(const char* const* sensor_ids,
-                                    const char* const* field_names,
-                                    uint32_t count);
+    uint32_t register_frame_layout(const char* const* sensor_ids, const char* const* field_names, uint32_t count);
 
     // Scalar hot path - scatters values into the write slot, then commits.
     void push_frame(const double* values, uint32_t count);
 
     // String fields - low-frequency, not on the hot path.
-    void set_sensor_field_string(std::string_view sensor_id,
-                                  std::string_view field_name,
-                                  std::string_view value);
+    void set_sensor_field_string(std::string_view sensor_id, std::string_view field_name, std::string_view value);
 
     // Blob path - validates that each sensor id is known and returns the count of valid ones.
     // Called once after sensor creation in GE Lua.
@@ -103,12 +96,10 @@ class VehicleNode : public rclcpp::Node {
 
     // Blob hot path - copies all descriptors into write slots and commits them all at once.
     // Batching the commits prevents the publish thread from seeing a partial blob update.
-    void push_blobs_batch(const BngBlobDesc* descs, uint32_t count);
+    void push_blobs_batch(const BngBlobDesc* blob_descriptions, uint32_t count);
 
     // Binds named shared memory regions to camera streams; stream_index matches registration order in init_sensor_publishers.
-    void set_camera_streams(uint32_t sensor_idx,
-                            const ::BngCameraStreamDesc* streams,
-                            uint32_t count);
+    void set_camera_streams(uint32_t sensor_idx, const ::BngCameraStreamDesc* streams, uint32_t count);
 
     // Called from the C API init/destroy functions.
     void start_publish_thread();
@@ -220,11 +211,7 @@ BNG_ROS2_API void     bngros2_handle_set_sensor_field_string(void* handle, const
 BNG_ROS2_API char     bngros2_handle_get_control(void* handle, double* steering, double* throttle, double* brake, double* parkingbrake, double* clutch, int8_t* gear);
 
 // Id-based setup functions - called once, map lookup cost is acceptable.
-BNG_ROS2_API void     bngros2_broadcast_tf(uint32_t id, double pos[3], double rot[4]);
 BNG_ROS2_API void     bngros2_vehicle_set_data(uint32_t id, double scale[3], double color[4], double arrow_color[4]);
 BNG_ROS2_API uint32_t bngros2_register_sensor_fields(uint32_t id, const char* const* sensor_ids, const char* const* field_names, uint32_t count);
-BNG_ROS2_API void     bngros2_vehicle_push_frame(uint32_t id, const double* values, uint32_t count);
-BNG_ROS2_API void     bngros2_vehicle_set_sensor_field_string(uint32_t id, const char* sensor_id, const char* field_name, const char* value);
 BNG_ROS2_API uint32_t bngros2_register_blob_sensors(uint32_t vehicle_id, const char* const* sensor_ids, uint32_t count);
-BNG_ROS2_API void     bngros2_push_blobs_batch(uint32_t vehicle_id, const BngBlobDesc* descs, uint32_t count);
 }

@@ -23,7 +23,12 @@ static void ros2_init() {
       ros2_init();
     } else if (reason == DLL_PROCESS_DETACH && lpReserved == nullptr) {
       // lpReserved == nullptr means FreeLibrary was called (not process exit)
-      try { rclcpp::shutdown(); } catch (...) {}
+      try {
+        rclcpp::shutdown();
+      } catch (const std::exception& e) {
+        std::cerr << "[ROS2 ERROR] " << e.what() << "\n";
+        return FALSE;
+      }
     }
     return TRUE;
   }

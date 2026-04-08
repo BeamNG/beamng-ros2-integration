@@ -30,12 +30,15 @@
 #include <vector>
 #include <cstdint>
 #include <cstring>
-#include <cmath>
 
 namespace bng_ros2 {
 
 namespace intr = rosidl_typesupport_introspection_cpp;
 
+// Empty sensor_config.frame_id means "use the ROS node name" for std_msgs/Header.frame_id.
+static std::string config_frame_id(rclcpp::Node& node, const std::string& frame_id_cfg) {
+  return frame_id_cfg.empty() ? std::string(node.get_name()) : frame_id_cfg;
+}
 
 SensorFactoryRegistry& SensorFactoryRegistry::instance() {
   static SensorFactoryRegistry inst;
@@ -88,16 +91,17 @@ static FieldResolution resolve_field_path(
   const std::string tail = (dot == std::string::npos) ? ""       : dot_path.substr(dot + 1);
 
   for (uint32_t i = 0; i < members->member_count_; ++i) {
-    const auto& m = members->members_[i];
-    if (head != m.name_) continue;
+    const auto& member = members->members_[i];
+    if (head != member.name_) continue;
 
-    size_t field_offset = base_offset + m.offset_;
+    size_t field_offset = base_offset + member.offset_;
 
     if (tail.empty()) {
-      return {field_offset, m.type_id_, true};
+      return {field_offset, member.type_id_, true};
     }
-    if (m.type_id_ == intr::ROS_TYPE_MESSAGE && m.members_ != nullptr) {
-      const auto* nested = reinterpret_cast<const intr::MessageMembers*>(m.members_->data);
+    
+    if (member.type_id_ == intr::ROS_TYPE_MESSAGE && member.members_ != nullptr) {
+      const auto* nested = reinterpret_cast<const intr::MessageMembers*>(member.members_->data);
       return resolve_field_path(nested, tail, field_offset);
     }
 
@@ -129,73 +133,72 @@ static void write_numeric(uint8_t* base, size_t offset, uint8_t type_id, double 
 
 // Write a string into a raw message buffer at the given offset.
 // The field in the compiled struct is a std::string, so we assign through a pointer.
-static void write_string(uint8_t* base, size_t offset, const std::string& v) {
-  *reinterpret_cast<std::string*>(base + offset) = v;
+static void write_string(uint8_t* base, size_t offset, const std::string& value) {
+  *reinterpret_cast<std::string*>(base + offset) = value;
 }
 
-// C++17 detection trait: does MsgT have a 'header' member?
+// C++17-compatible detection of a message type having a 'header' member.
 template<typename T, typename = void>
 struct has_header : std::false_type {};
 template<typename T>
 struct has_header<T, std::void_t<decltype(std::declval<T&>().header)>> : std::true_type {};
 
-// Generic factory for any compiled beamng_msgs message type.
-//
-// At init time: retrieves rosidl introspection metadata, resolves each field from the
-// JSON config to a byte offset and type id, and builds a FieldWriter vector with integer indices into ScalarStore/StringStore.
-//
-// At publish time: iterates the FieldWriters using direct array reads (no string hashing),
-// writes values into the message struct, and publishes.
-template<typename MsgT>
+/* Generic factory for any compiled beamng_msgs message type.
+  
+  At init time: retrieves rosidl introspection metadata, resolves each field from the
+  JSON sensor_config to a byte offset and type id, and builds a FieldWriter vector with integer indices into ScalarStore/StringStore.
+  
+  At publish time: iterates the FieldWriters using direct array reads (no string hashing),
+  writes values into the message struct, and publishes.
+*/
+template<typename MessageType>
 static ScalarRegisterResult make_generic_factory(
     rclcpp::Node& node,
     const std::string& topic,
-    const SensorConfig& sensor_cfg,
+    const SensorConfig& sensor_config,
     uint32_t scalar_base_idx,
     uint32_t string_base_idx)
 {
-  const rosidl_message_type_support_t* ts =
-      rosidl_typesupport_cpp::get_message_type_support_handle<MsgT>();
-  const rosidl_message_type_support_t* intr_ts =
-      get_message_typesupport_handle(ts, intr::typesupport_identifier);
-  const auto* members = reinterpret_cast<const intr::MessageMembers*>(intr_ts->data);
+  const rosidl_message_type_support_t* type_support = rosidl_typesupport_cpp::get_message_type_support_handle<MessageType>();
+  const rosidl_message_type_support_t* introspection_type_support = get_message_typesupport_handle(type_support, intr::typesupport_identifier);
+  const auto* members = reinterpret_cast<const intr::MessageMembers*>(introspection_type_support->data);
 
-  std::vector<FieldWriter> writers;
-  writers.reserve(sensor_cfg.fields.size());
+  std::vector<FieldWriter> field_writers;
+  field_writers.reserve(sensor_config.fields.size());
 
   uint32_t scalar_local_idx = 0;
   uint32_t string_local_idx = 0;
 
-  for (const auto& field : sensor_cfg.fields) {
-    auto res = resolve_field_path(members, field.name);
-    if (!res.found) {
-      std::cerr << "[ROS2 WARN] " << sensor_cfg.msg_file << ": field '"
+  for (const auto& field : sensor_config.fields) {
+    auto result = resolve_field_path(members, field.name);
+
+    if (!result.found) {
+      std::cerr << "[ROS2 WARN] " << sensor_config.msg_file << ": field '"
                 << field.name << "' not found in introspection, skipping.\n";
       continue;
     }
-    const bool is_str = (res.type_id == intr::ROS_TYPE_STRING);
+
+    const bool is_str = (result.type_id == intr::ROS_TYPE_STRING);
     const uint32_t idx = is_str
         ? (string_base_idx + string_local_idx++)
         : (scalar_base_idx + scalar_local_idx++);
 
-    writers.push_back({idx, res.offset, res.type_id, is_str});
+    field_writers.push_back({idx, result.offset, result.type_id, is_str});
   }
 
-  auto pub = node.create_publisher<MsgT>(topic, 10);
-  const std::string frame_id = sensor_cfg.frame_id.empty()
-      ? std::string(node.get_name()) : sensor_cfg.frame_id;
+  auto publisher = node.create_publisher<MessageType>(topic, 10);
+  const std::string frame_id = config_frame_id(node, sensor_config.frame_id);
 
   // Capture the expected store sizes so the publish-time bounds checks are simple integer comparisons against a captured constant,
   // not a virtual call to vector::size() inside the hot loop.
   const uint32_t expected_scalar_slots = scalar_base_idx + scalar_local_idx;
   const uint32_t expected_string_slots = string_base_idx + string_local_idx;
 
-  PublishFn fn = [pub, frame_id, writers = std::move(writers),
-                  expected_scalar_slots, expected_string_slots](
+  PublishFn publish_fn = [publisher, frame_id, field_writers = std::move(field_writers), expected_scalar_slots, expected_string_slots](
       const ScalarStore& scalars, const StringStore& strings, const rclcpp::Time& stamp)
   {
-    MsgT msg;
-    if constexpr (has_header<MsgT>::value) {
+    MessageType msg;
+    if constexpr (has_header<MessageType>::value) {
       msg.header.stamp    = stamp;
       msg.header.frame_id = frame_id;
     }
@@ -204,87 +207,89 @@ static ScalarRegisterResult make_generic_factory(
       return;
 
     auto* base = reinterpret_cast<uint8_t*>(&msg);
-    for (const auto& w : writers) {
-      if (w.is_string) {
-        write_string(base, w.offset, strings[w.value_idx]);
+    for (const auto& writer : field_writers) {
+      if (writer.is_string) {
+        write_string(base, writer.offset, strings[writer.value_idx]);
       } else {
-        write_numeric(base, w.offset, w.type_id, scalars[w.value_idx]);
+        write_numeric(base, writer.offset, writer.type_id, scalars[writer.value_idx]);
       }
     }
     
-    pub->publish(msg);
+    publisher->publish(msg);
   };
   
-  return {std::move(fn), scalar_local_idx, string_local_idx};
+  return {std::move(publish_fn), scalar_local_idx, string_local_idx};
 }
 
 // Reads a uint8 from a byte buffer at *pos and advances *pos.
 static inline uint8_t read_u8(const uint8_t* data, uint32_t* pos) {
-  uint8_t v = data[*pos];
+  uint8_t value = data[*pos];
   *pos += 1;
-  return v;
+  return value;
 }
 
 // Reads a uint16 from a byte buffer at *pos and advances *pos.
 static inline uint16_t read_u16(const uint8_t* data, uint32_t* pos) {
-  uint16_t v;
-  std::memcpy(&v, data + *pos, sizeof(v));
-  *pos += sizeof(v);
-  return v;
+  uint16_t value;
+  std::memcpy(&value, data + *pos, sizeof(value));
+  *pos += sizeof(value);
+  return value;
 }
 
 // Reads a uint32 from a byte buffer at *pos and advances *pos.
 static inline uint32_t read_u32(const uint8_t* data, uint32_t* pos) {
-  uint32_t v;
-  std::memcpy(&v, data + *pos, sizeof(v));
-  *pos += sizeof(v);
-  return v;
+  uint32_t value;
+  std::memcpy(&value, data + *pos, sizeof(value));
+  *pos += sizeof(value);
+  return value;
 }
 
 // Reads a int32 from a byte buffer at *pos and advances *pos.
 static inline int32_t read_i32(const uint8_t* data, uint32_t* pos) {
-  int32_t v;
-  std::memcpy(&v, data + *pos, sizeof(v));
-  *pos += sizeof(v);
-  return v;
+  int32_t value;
+  std::memcpy(&value, data + *pos, sizeof(value));
+  *pos += sizeof(value);
+  return value;
 }
 
 // Reads a float32 from a byte buffer at *pos and advances *pos.
 static inline float read_f32(const uint8_t* data, uint32_t* pos) {
-  float v;
-  std::memcpy(&v, data + *pos, sizeof(v));
-  *pos += sizeof(v);
-  return v;
+  float value;
+  std::memcpy(&value, data + *pos, sizeof(value));
+  *pos += sizeof(value);
+  return value;
 }
 
 // Reads a float64 from a byte buffer at *pos and advances *pos.
 static inline double read_f64(const uint8_t* data, uint32_t* pos) {
-  double v;
-  std::memcpy(&v, data + *pos, sizeof(v));
-  *pos += sizeof(v);
-  return v;
+  double value;
+  std::memcpy(&value, data + *pos, sizeof(value));
+  *pos += sizeof(value);
+  return value;
 }
 
 // Reads a length-prefixed string (uint16 len + bytes) at *pos and advances *pos.
 static inline std::string read_str(const uint8_t* data, uint32_t* pos) {
   const uint16_t len = read_u16(data, pos);
-  std::string s(reinterpret_cast<const char*>(data + *pos), len);
+  std::string value(reinterpret_cast<const char*>(data + *pos), len);
   *pos += len;
-  return s;
+  return value;
 }
 
 // Decode one length-prefixed parallel array section from the blob into a message.
 // Reads [uint32 count] then calls each field_reader count times in order.
-template<typename MsgT>
+template<typename MessageType>
 static void decode_section(
-    MsgT& msg,
-    const std::vector<std::function<void(MsgT&, const uint8_t*, uint32_t*)>>& field_readers,
+    MessageType& msg,
+    const std::vector<std::function<void(MessageType&, const uint8_t*, uint32_t*)>>& field_readers,
     const uint8_t* data,
     uint32_t len,
     uint32_t* pos)
 {
   if (*pos + sizeof(uint32_t) > len) return;
+
   const uint32_t count = read_u32(data, pos);
+
   for (uint32_t i = 0; i < count; ++i) {
     for (const auto& reader : field_readers) {
       if (*pos >= len) return;
@@ -298,38 +303,39 @@ static void decode_section(
 // Wire format per section: [uint32 count] then count entries, each field in order:
 //   string  → [uint16 len][bytes]
 //   float64 → [float64]
-template<typename MsgT>
+template<typename MessageType>
 static BlobPublishFn make_dynamic_array_factory(
     rclcpp::Node& node,
     const std::string& topic,
-    const SensorConfig& cfg,
-    std::vector<std::vector<std::function<void(MsgT&, const uint8_t*, uint32_t*)>>> section_readers)
+    const SensorConfig& sensor_config,
+    std::vector<std::vector<std::function<void(MessageType&, const uint8_t*, uint32_t*)>>> section_readers)
 {
-  auto pub      = node.create_publisher<MsgT>(topic, 10);
+  auto publisher = node.create_publisher<MessageType>(topic, 10);
   auto node_ptr = node.shared_from_this();
-  const std::string frame_id = cfg.frame_id.empty() ? std::string(node.get_name()) : cfg.frame_id;
+  const std::string frame_id = config_frame_id(node, sensor_config.frame_id);
 
-  return [pub, node_ptr, frame_id,
-          readers = std::move(section_readers)](
-      const uint8_t* data, uint32_t len, uint64_t ts_ns) mutable
+  return [publisher, node_ptr, frame_id, section_readers = std::move(section_readers)]
+    (const uint8_t* data, uint32_t len, uint64_t timestamp_ns) mutable
   {
-    MsgT msg;
-    if constexpr (has_header<MsgT>::value) {
-      msg.header.stamp    = rclcpp::Time(static_cast<int64_t>(ts_ns));
+    MessageType msg;
+
+    if constexpr (has_header<MessageType>::value) {
+      msg.header.stamp    = rclcpp::Time(static_cast<int64_t>(timestamp_ns));
       msg.header.frame_id = frame_id;
     }
+
     uint32_t pos = 0;
-    for (const auto& section_readers_i : readers) {
-      decode_section(msg, section_readers_i, data, len, &pos);
+    for (const auto& section_reader : section_readers) {
+      decode_section(msg, section_reader, data, len, &pos);
     }
-    pub->publish(msg);
+    publisher->publish(msg);
   };
 }
 
 static BlobPublishFn make_dynamic_array_sensor_factory(
     rclcpp::Node& node,
     const std::string& topic,
-    const SensorConfig& cfg)
+    const SensorConfig& sensor_config)
 {
   using beamng_msgs::msg::DamageSensor;
   using Msg = DamageSensor;
@@ -337,20 +343,20 @@ static BlobPublishFn make_dynamic_array_sensor_factory(
 
   std::vector<std::vector<FieldFn>> readers = {
     {
-      [](Msg& m, const uint8_t* d, uint32_t* p) { m.deformgroup_id.push_back(read_str(d, p)); },
-      [](Msg& m, const uint8_t* d, uint32_t* p) { m.inv_max_events.push_back(read_f64(d, p)); },
-      [](Msg& m, const uint8_t* d, uint32_t* p) { m.damage.push_back(read_f64(d, p)); },
-      [](Msg& m, const uint8_t* d, uint32_t* p) { m.event_count.push_back(read_f64(d, p)); },
-      [](Msg& m, const uint8_t* d, uint32_t* p) { m.max_events.push_back(read_f64(d, p)); },
+      [](Msg& msg, const uint8_t* data, uint32_t* pos) { msg.deformgroup_id.push_back(read_str(data, pos)); },
+      [](Msg& msg, const uint8_t* data, uint32_t* pos) { msg.inv_max_events.push_back(read_f64(data, pos)); },
+      [](Msg& msg, const uint8_t* data, uint32_t* pos) { msg.damage.push_back(read_f64(data, pos)); },
+      [](Msg& msg, const uint8_t* data, uint32_t* pos) { msg.event_count.push_back(read_f64(data, pos)); },
+      [](Msg& msg, const uint8_t* data, uint32_t* pos) { msg.max_events.push_back(read_f64(data, pos)); },
     },
     {
-      [](Msg& m, const uint8_t* d, uint32_t* p) { m.part_id.push_back(read_str(d, p)); },
-      [](Msg& m, const uint8_t* d, uint32_t* p) { m.name.push_back(read_str(d, p)); },
-      [](Msg& m, const uint8_t* d, uint32_t* p) { m.part_damage.push_back(read_f64(d, p)); },
+      [](Msg& msg, const uint8_t* data, uint32_t* pos) { msg.part_id.push_back(read_str(data, pos)); },
+      [](Msg& msg, const uint8_t* data, uint32_t* pos) { msg.name.push_back(read_str(data, pos)); },
+      [](Msg& msg, const uint8_t* data, uint32_t* pos) { msg.part_damage.push_back(read_f64(data, pos)); },
     },
   };
 
-  return make_dynamic_array_factory<Msg>(node, topic, cfg, std::move(readers));
+  return make_dynamic_array_factory<Msg>(node, topic, sensor_config, std::move(readers));
 }
 
 // Wire format for PowertrainSensor (virtual blob, vehicle-side encoder):
@@ -361,18 +367,18 @@ static BlobPublishFn make_dynamic_array_sensor_factory(
 static BlobPublishFn make_powertrain_sensor_factory(
     rclcpp::Node& node,
     const std::string& topic,
-    const SensorConfig& cfg)
+    const SensorConfig& sensor_config)
 {
   using beamng_msgs::msg::PowertrainSensor;
   using beamng_msgs::msg::PowertrainSensorDevice;
 
-  auto pub = node.create_publisher<PowertrainSensor>(topic, 10);
-  const std::string frame_id = cfg.frame_id.empty() ? std::string(node.get_name()) : cfg.frame_id;
+  auto publisher = node.create_publisher<PowertrainSensor>(topic, 10);
+  const std::string frame_id = config_frame_id(node, sensor_config.frame_id);
 
-  return [pub, frame_id](const uint8_t* data, uint32_t len, uint64_t ts_ns) mutable
+  return [publisher, frame_id](const uint8_t* data, uint32_t len, uint64_t timestamp_ns) mutable
   {
     PowertrainSensor msg;
-    msg.header.stamp    = rclcpp::Time(static_cast<int64_t>(ts_ns));
+    msg.header.stamp    = rclcpp::Time(static_cast<int64_t>(timestamp_ns));
     msg.header.frame_id = frame_id;
 
     uint32_t pos = 0;
@@ -381,69 +387,68 @@ static BlobPublishFn make_powertrain_sensor_factory(
 
     for (uint32_t i = 0; i < count && pos < len; ++i) {
       PowertrainSensorDevice dev;
-      dev.name            = read_str(data, &pos);
-      dev.input_av        = read_f64(data, &pos);
-      dev.gear_ratio      = read_f64(data, &pos);
-      dev.is_broken       = (read_u8(data, &pos) != 0);
-      dev.mode            = read_str(data, &pos);
-      dev.parent_name     = read_str(data, &pos);
+      dev.name                = read_str(data, &pos);
+      dev.input_av            = read_f64(data, &pos);
+      dev.gear_ratio          = read_f64(data, &pos);
+      dev.is_broken           = (read_u8(data, &pos) != 0);
+      dev.mode                = read_str(data, &pos);
+      dev.parent_name         = read_str(data, &pos);
       dev.parent_output_index = read_i32(data, &pos);
-      dev.output_torque_1 = read_f64(data, &pos);
-      dev.output_av_1     = read_f64(data, &pos);
-      dev.output_torque_2 = read_f64(data, &pos);
-      dev.output_av_2    = read_f64(data, &pos);
+      dev.output_torque_1     = read_f64(data, &pos);
+      dev.output_av_1         = read_f64(data, &pos);
+      dev.output_torque_2     = read_f64(data, &pos);
+      dev.output_av_2         = read_f64(data, &pos);
       msg.devices.push_back(dev);
     }
-    pub->publish(msg);
+    publisher->publish(msg);
   };
 }
 
 static BlobPublishFn make_pointcloud2_factory(
     rclcpp::Node& node,
     const std::string& topic,
-    const SensorConfig& cfg)
+    const SensorConfig& sensor_config)
 {
-  auto pub = node.create_publisher<sensor_msgs::msg::PointCloud2>(topic, 10);
+  auto publisher = node.create_publisher<sensor_msgs::msg::PointCloud2>(topic, 10);
 
   // Build a template message with all fixed fields set once at init time.
-  sensor_msgs::msg::PointCloud2 tmpl;
-  tmpl.header.frame_id = cfg.frame_id.empty() ? node.get_name() : cfg.frame_id;
-  tmpl.height          = 1;      // unorganised point cloud
-  tmpl.is_bigendian    = false;
-  tmpl.is_dense        = false;
+  sensor_msgs::msg::PointCloud2 template_msg;
+  template_msg.header.frame_id = config_frame_id(node, sensor_config.frame_id);
+  template_msg.height          = 1;      // unorganised point cloud
+  template_msg.is_bigendian    = false;
+  template_msg.is_dense        = false;
 
-  const uint32_t stride = cfg.blob_layout.point_stride > 0
-      ? cfg.blob_layout.point_stride : 12u;  // default: xyz float32 = 12 bytes
+  const uint32_t stride = sensor_config.blob_layout.point_stride > 0
+      ? sensor_config.blob_layout.point_stride : 12u;  // default: xyz float32 = 12 bytes
 
-  tmpl.point_step = stride;
+  template_msg.point_step = stride;
 
   // "xyz_float32" → three float32 fields at byte offsets 0, 4, 8.
-  if (cfg.blob_layout.format == "xyz_float32" || cfg.blob_layout.format.empty()) {
+  if (sensor_config.blob_layout.format == "xyz_float32" || sensor_config.blob_layout.format.empty()) {
     sensor_msgs::msg::PointField fx, fy, fz;
-    fx.name = "x"; fx.offset = 0;  fx.datatype = sensor_msgs::msg::PointField::FLOAT32; fx.count = 1;
-    fy.name = "y"; fy.offset = 4;  fy.datatype = sensor_msgs::msg::PointField::FLOAT32; fy.count = 1;
-    fz.name = "z"; fz.offset = 8;  fz.datatype = sensor_msgs::msg::PointField::FLOAT32; fz.count = 1;
-    tmpl.fields = {fx, fy, fz};
+    fx.name = "x"; fx.offset = 0; fx.datatype = sensor_msgs::msg::PointField::FLOAT32; fx.count = 1;
+    fy.name = "y"; fy.offset = 4; fy.datatype = sensor_msgs::msg::PointField::FLOAT32; fy.count = 1;
+    fz.name = "z"; fz.offset = 8; fz.datatype = sensor_msgs::msg::PointField::FLOAT32; fz.count = 1;
+    template_msg.fields = {fx, fy, fz};
   }
 
   // Pre-size the data buffer to max capacity so assign() never reallocates at publish time.
-  const uint32_t max_bytes = cfg.blob_layout.max_bytes;
+  const uint32_t max_bytes = sensor_config.blob_layout.max_bytes;
   if (max_bytes > 0) {
-    tmpl.data.resize(max_bytes);
+    template_msg.data.resize(max_bytes);
   }
 
-  // Capture msg (not tmpl) directly so the lambda reuses the same allocation every call.
+  // Capture msg (not template_msg) directly so the lambda reuses the same allocation every call.
   // Only the per-frame mutable fields (stamp, width, row_step, data) are updated;
   // the fixed fields (frame_id, height, is_bigendian, is_dense, point_step, fields) are set once here and never touched again.
-  return [pub, msg = std::move(tmpl), stride](
-      const uint8_t* data, uint32_t len, uint64_t ts_ns) mutable
+  return [publisher, msg = std::move(template_msg), stride]
+    (const uint8_t* data, uint32_t len, uint64_t timestamp_ns) mutable
   {
-    msg.header.stamp = rclcpp::Time(static_cast<int64_t>(ts_ns));
+    msg.header.stamp = rclcpp::Time(static_cast<int64_t>(timestamp_ns));
     msg.width        = (stride > 0) ? (len / stride) : 0;
     msg.row_step     = len;
-    // assign() writes exactly len bytes into the pre-sized buffer - no reallocation.
     msg.data.assign(data, data + len);
-    pub->publish(msg);
+    publisher->publish(msg);
   };
 }
 
@@ -460,30 +465,27 @@ static BlobPublishFn make_pointcloud2_factory(
 static BlobPublishFn make_radar_scan_factory(
     rclcpp::Node& node,
     const std::string& topic,
-    const SensorConfig& cfg)
+    const SensorConfig& sensor_config)
 {
   using beamng_msgs::msg::RadarScan;
   using beamng_msgs::msg::RadarReturn;
 
-  auto pub = node.create_publisher<RadarScan>(topic, 10);
-  const std::string frame_id = cfg.frame_id.empty() ? std::string(node.get_name()) : cfg.frame_id;
+  auto publisher = node.create_publisher<RadarScan>(topic, 10);
+  const std::string frame_id = config_frame_id(node, sensor_config.frame_id);
 
   static constexpr uint32_t RETURN_STRIDE = 7 * sizeof(float);  // 28 bytes
-  static_assert(sizeof(RadarReturn) == RETURN_STRIDE,
-                "RadarReturn must match wire layout (7xfloat32, no padding) for bulk memcpy");
-  static_assert(std::is_trivially_copyable_v<RadarReturn>,
-                "RadarReturn must be memcpy-safe");
+  static_assert(sizeof(RadarReturn) == RETURN_STRIDE, "RadarReturn must match wire layout (7xfloat32, no padding) for bulk memcpy");
+  static_assert(std::is_trivially_copyable_v<RadarReturn>, "RadarReturn must be memcpy-safe");
 
   // Pre-size the sequence once, publish path only adjusts length and copies wire bytes.
-  const uint32_t max_returns = cfg.blob_layout.max_bytes > 0
-      ? cfg.blob_layout.max_bytes / RETURN_STRIDE : 1000u;
+  const uint32_t max_returns = sensor_config.blob_layout.max_bytes > 0
+      ? sensor_config.blob_layout.max_bytes / RETURN_STRIDE : 1000u;
 
-  RadarScan tmpl;
-  tmpl.header.frame_id = frame_id;
-  tmpl.returns.reserve(max_returns);
+  RadarScan template_msg;
+  template_msg.header.frame_id = frame_id;
+  template_msg.returns.reserve(max_returns);
 
-  return [pub, msg = std::move(tmpl), max_returns](
-      const uint8_t* data, uint32_t len, uint64_t ts_ns) mutable
+  return [publisher, msg = std::move(template_msg), max_returns](const uint8_t* data, uint32_t len, uint64_t timestamp_ns) mutable
   {
     const uint32_t count = len / RETURN_STRIDE;
     if (count == 0) {
@@ -491,11 +493,11 @@ static BlobPublishFn make_radar_scan_factory(
     }
     const uint32_t use_count = (count > max_returns) ? max_returns : count;
 
-    msg.header.stamp = rclcpp::Time(static_cast<int64_t>(ts_ns));
+    msg.header.stamp = rclcpp::Time(static_cast<int64_t>(timestamp_ns));
     msg.returns.resize(use_count);
     std::memcpy(msg.returns.data(), data, static_cast<size_t>(use_count) * RETURN_STRIDE);
 
-    pub->publish(msg);
+    publisher->publish(msg);
   };
 }
 
@@ -508,40 +510,39 @@ static BlobPublishFn make_radar_scan_factory(
 static BlobPublishFn make_imu_factory(
     rclcpp::Node& node,
     const std::string& topic,
-    const SensorConfig& cfg)
+    const SensorConfig& sensor_config)
 {
   using sensor_msgs::msg::Imu;
 
-  auto pub      = node.create_publisher<Imu>(topic, 10);
-  const std::string frame_id = cfg.frame_id.empty() ? std::string(node.get_name()) : cfg.frame_id;
+  auto publisher = node.create_publisher<Imu>(topic, 10);
+  const std::string frame_id = config_frame_id(node, sensor_config.frame_id);
 
   static constexpr uint32_t PAYLOAD_SIZE = 10 * sizeof(double);  // 80 bytes
 
-  Imu tmpl;
-  tmpl.header.frame_id = frame_id;
-  tmpl.orientation_covariance[0]         = -1.0;
-  tmpl.angular_velocity_covariance[0]    = -1.0;
-  tmpl.linear_acceleration_covariance[0] = -1.0;
+  Imu template_msg;
+  template_msg.header.frame_id = frame_id;
+  template_msg.orientation_covariance[0]         = -1.0;
+  template_msg.angular_velocity_covariance[0]    = -1.0;
+  template_msg.linear_acceleration_covariance[0] = -1.0;
 
-  return [pub, msg = std::move(tmpl)](
-      const uint8_t* data, uint32_t len, uint64_t ts_ns) mutable
+  return [publisher, msg = std::move(template_msg)](const uint8_t* data, uint32_t len, uint64_t timestamp_ns) mutable
   {
     if (len < PAYLOAD_SIZE) return;
 
-    double f[10]; std::memcpy(f, data, sizeof(f));
-    msg.header.stamp          = rclcpp::Time(static_cast<int64_t>(ts_ns));
-    msg.angular_velocity.x    = f[0];
-    msg.angular_velocity.y    = f[1];
-    msg.angular_velocity.z    = f[2];
-    msg.linear_acceleration.x = f[3];
-    msg.linear_acceleration.y = f[4];
-    msg.linear_acceleration.z = f[5];
-    msg.orientation.x         = f[6];
-    msg.orientation.y         = f[7];
-    msg.orientation.z         = f[8];
-    msg.orientation.w         = f[9];
+    double values[10]; std::memcpy(values, data, sizeof(values));
+    msg.header.stamp          = rclcpp::Time(static_cast<int64_t>(timestamp_ns));
+    msg.angular_velocity.x    = values[0];
+    msg.angular_velocity.y    = values[1];
+    msg.angular_velocity.z    = values[2];
+    msg.linear_acceleration.x = values[3];
+    msg.linear_acceleration.y = values[4];
+    msg.linear_acceleration.z = values[5];
+    msg.orientation.x         = values[6];
+    msg.orientation.y         = values[7];
+    msg.orientation.z         = values[8];
+    msg.orientation.w         = values[9];
 
-    pub->publish(msg);
+    publisher->publish(msg);
   };
 }
 
@@ -556,54 +557,55 @@ static BlobPublishFn make_imu_factory(
 static BlobPublishFn make_roads_sensor_factory(
     rclcpp::Node& node,
     const std::string& topic,
-    const SensorConfig& cfg)
+    const SensorConfig& sensor_config)
 {
   using beamng_msgs::msg::RoadsSensor;
 
-  auto pub = node.create_publisher<RoadsSensor>(topic, 10);
-  const std::string frame_id = cfg.frame_id.empty() ? std::string(node.get_name()) : cfg.frame_id;
+  auto publisher = node.create_publisher<RoadsSensor>(topic, 10);
+  const std::string frame_id = config_frame_id(node, sensor_config.frame_id);
 
   static constexpr uint32_t PAYLOAD_SIZE = 54 * sizeof(double);  // 432 bytes
 
-  RoadsSensor tmpl;
-  tmpl.header.frame_id = frame_id;
+  RoadsSensor template_msg;
+  template_msg.header.frame_id = frame_id;
 
-  return [pub, msg = std::move(tmpl)](
-      const uint8_t* data, uint32_t len, uint64_t ts_ns) mutable
+  return [publisher, msg = std::move(template_msg)](
+      const uint8_t* data, uint32_t len, uint64_t timestamp_ns) mutable
   {
     if (len < PAYLOAD_SIZE) return;
 
-    const double* f = reinterpret_cast<const double*>(data);
-    msg.header.stamp = rclcpp::Time(static_cast<int64_t>(ts_ns));
+    const double* values = reinterpret_cast<const double*>(data);
+    msg.header.stamp = rclcpp::Time(static_cast<int64_t>(timestamp_ns));
 
-    msg.dist2_cl      = f[0];
-    msg.dist2_left    = f[1];
-    msg.dist2_right   = f[2];
-    msg.half_width   = f[3];
-    msg.road_radius  = f[4];
-    msg.heading_angle = f[5];
+    msg.dist2_cl      = values[0];
+    msg.dist2_left    = values[1];
+    msg.dist2_right   = values[2];
+    msg.half_width   = values[3];
+    msg.road_radius  = values[4];
+    msg.heading_angle = values[5];
 
-    msg.p0_on_cl.x = f[6];  msg.p0_on_cl.y = f[7];  msg.p0_on_cl.z = f[8];
-    msg.p1_on_cl.x = f[9];  msg.p1_on_cl.y = f[10]; msg.p1_on_cl.z = f[11];
-    msg.p2_on_cl.x = f[12]; msg.p2_on_cl.y = f[13]; msg.p2_on_cl.z = f[14];
-    msg.p3_on_cl.x = f[15]; msg.p3_on_cl.y = f[16]; msg.p3_on_cl.z = f[17];
+    msg.p0_on_cl.x = values[6];  msg.p0_on_cl.y = values[7];  msg.p0_on_cl.z = values[8];
+    msg.p1_on_cl.x = values[9];  msg.p1_on_cl.y = values[10]; msg.p1_on_cl.z = values[11];
+    msg.p2_on_cl.x = values[12]; msg.p2_on_cl.y = values[13]; msg.p2_on_cl.z = values[14];
+    msg.p3_on_cl.x = values[15]; msg.p3_on_cl.y = values[16]; msg.p3_on_cl.z = values[17];
 
-    msg.u_cl.a = f[18]; msg.u_cl.b = f[19]; msg.u_cl.c = f[20]; msg.u_cl.d = f[21];
-    msg.v_cl.a = f[22]; msg.v_cl.b = f[23]; msg.v_cl.c = f[24]; msg.v_cl.d = f[25];
-    msg.u_left_re.a = f[26]; msg.u_left_re.b = f[27]; msg.u_left_re.c = f[28]; msg.u_left_re.d = f[29];
-    msg.v_left_re.a = f[30]; msg.v_left_re.b = f[31]; msg.v_left_re.c = f[32]; msg.v_left_re.d = f[33];
-    msg.u_right_re.a = f[34]; msg.u_right_re.b = f[35]; msg.u_right_re.c = f[36]; msg.u_right_re.d = f[37];
-    msg.v_right_re.a = f[38]; msg.v_right_re.b = f[39]; msg.v_right_re.c = f[40]; msg.v_right_re.d = f[41];
+    msg.u_cl.a = values[18]; msg.u_cl.b = values[19]; msg.u_cl.c = values[20]; msg.u_cl.d = values[21];
+    msg.v_cl.a = values[22]; msg.v_cl.b = values[23]; msg.v_cl.c = values[24]; msg.v_cl.d = values[25];
 
-    msg.start_cl.x = f[42]; msg.start_cl.y = f[43]; msg.start_cl.z = f[44];
-    msg.start_l.x  = f[45]; msg.start_l.y  = f[46]; msg.start_l.z  = f[47];
-    msg.start_r.x  = f[48]; msg.start_r.y  = f[49]; msg.start_r.z  = f[50];
+    msg.u_left_re.a = values[26];  msg.u_left_re.b = values[27];  msg.u_left_re.c = values[28];  msg.u_left_re.d = values[29];
+    msg.v_left_re.a = values[30];  msg.v_left_re.b = values[31];  msg.v_left_re.c = values[32];  msg.v_left_re.d = values[33];
+    msg.u_right_re.a = values[34]; msg.u_right_re.b = values[35]; msg.u_right_re.c = values[36]; msg.u_right_re.d = values[37];
+    msg.v_right_re.a = values[38]; msg.v_right_re.b = values[39]; msg.v_right_re.c = values[40]; msg.v_right_re.d = values[41];
 
-    msg.drivability = f[51];
-    msg.speed_limit = f[52];
-    msg.flag1way    = f[53];
+    msg.start_cl.x = values[42]; msg.start_cl.y = values[43]; msg.start_cl.z = values[44];
+    msg.start_l.x  = values[45]; msg.start_l.y  = values[46]; msg.start_l.z  = values[47];
+    msg.start_r.x  = values[48]; msg.start_r.y  = values[49]; msg.start_r.z  = values[50];
 
-    pub->publish(msg);
+    msg.drivability = values[51];
+    msg.speed_limit = values[52];
+    msg.flag1way    = values[53];
+
+    publisher->publish(msg);
   };
 }
 
@@ -629,48 +631,48 @@ static BlobPublishFn make_roads_sensor_factory(
 static BlobPublishFn make_ideal_radar_factory(
     rclcpp::Node& node,
     const std::string& topic,
-    const SensorConfig& cfg)
+    const SensorConfig& sensor_config)
 {
   using beamng_msgs::msg::IdealRadarSensor;
   using beamng_msgs::msg::IdealRadarSensorVehicle;
 
-  auto pub      = node.create_publisher<IdealRadarSensor>(topic, 10);
+  auto publisher = node.create_publisher<IdealRadarSensor>(topic, 10);
   auto node_ptr = node.shared_from_this();
-  const std::string frame_id = cfg.frame_id.empty() ? std::string(node.get_name()) : cfg.frame_id;
+  const std::string frame_id = config_frame_id(node, sensor_config.frame_id);
 
   static constexpr uint32_t VEHICLE_STRIDE = 4 + 15 * sizeof(double);  // 124 bytes
   static constexpr uint32_t PAYLOAD_SIZE   = 4 * VEHICLE_STRIDE;        // 496 bytes
 
-  IdealRadarSensor tmpl;
-  tmpl.header.frame_id = frame_id;
+  IdealRadarSensor template_msg;
+  template_msg.header.frame_id = frame_id;
 
-  return [pub, node_ptr, msg = std::move(tmpl)](
-      const uint8_t* data, uint32_t len, uint64_t ts_ns) mutable
+  return [publisher, node_ptr, msg = std::move(template_msg)](
+      const uint8_t* data, uint32_t len, uint64_t timestamp_ns) mutable
   {
     if (len < PAYLOAD_SIZE) return;
 
-    msg.header.stamp = rclcpp::Time(static_cast<int64_t>(ts_ns));
+    msg.header.stamp = rclcpp::Time(static_cast<int64_t>(timestamp_ns));
 
     auto decode_vehicle = [&](uint32_t offset) -> IdealRadarSensorVehicle {
       IdealRadarSensorVehicle v;
-      int32_t vid; std::memcpy(&vid, data + offset, 4); offset += 4;
-      double f[15]; std::memcpy(f, data + offset, 15 * sizeof(double));
-      v.vehicle_id                = vid;
-      v.width                     = f[0];
-      v.length                    = f[1];
-      v.dist_to_player_vehicle_sq = f[2];
-      v.rel_dist_x                = f[3];
-      v.rel_dist_y                = f[4];
-      v.vel_bb.x                  = f[5];
-      v.vel_bb.y                  = f[6];
-      v.vel_bb.z                  = f[7];
-      v.rel_vel_x                 = f[8];
-      v.rel_vel_y                 = f[9];
-      v.acc.x                     = f[10];
-      v.acc.y                     = f[11];
-      v.acc.z                     = f[12];
-      v.rel_acc_x                 = f[13];
-      v.rel_acc_y                 = f[14];
+      int32_t vehicle_id; std::memcpy(&vehicle_id, data + offset, 4); offset += 4;
+      double values[15]; std::memcpy(values, data + offset, 15 * sizeof(double));
+      v.vehicle_id                = vehicle_id;
+      v.width                     = values[0];
+      v.length                    = values[1];
+      v.dist_to_player_vehicle_sq = values[2];
+      v.rel_dist_x                = values[3];
+      v.rel_dist_y                = values[4];
+      v.vel_bb.x                  = values[5];
+      v.vel_bb.y                  = values[6];
+      v.vel_bb.z                  = values[7];
+      v.rel_vel_x                 = values[8];
+      v.rel_vel_y                 = values[9];
+      v.acc.x                     = values[10];
+      v.acc.y                     = values[11];
+      v.acc.z                     = values[12];
+      v.rel_acc_x                 = values[13];
+      v.rel_acc_y                 = values[14];
       return v;
     };
 
@@ -679,7 +681,7 @@ static BlobPublishFn make_ideal_radar_factory(
     msg.closest_vehicles3 = decode_vehicle(2 * VEHICLE_STRIDE);
     msg.closest_vehicles4 = decode_vehicle(3 * VEHICLE_STRIDE);
 
-    pub->publish(msg);
+    publisher->publish(msg);
   };
 }
 
@@ -691,38 +693,38 @@ static BlobPublishFn make_ideal_radar_factory(
 static BlobPublishFn make_nav_sat_fix_factory(
     rclcpp::Node& node,
     const std::string& topic,
-    const SensorConfig& cfg)
+    const SensorConfig& sensor_config)
 {
   using sensor_msgs::msg::NavSatFix;
   using sensor_msgs::msg::NavSatStatus;
 
-  auto pub      = node.create_publisher<NavSatFix>(topic, 10);
+  auto publisher = node.create_publisher<NavSatFix>(topic, 10);
   auto node_ptr = node.shared_from_this();
-  const std::string frame_id = cfg.frame_id.empty() ? std::string(node.get_name()) : cfg.frame_id;
+  const std::string frame_id = config_frame_id(node, sensor_config.frame_id);
 
   static constexpr uint32_t PAYLOAD_SIZE = 3 * sizeof(double);  // 24 bytes
 
-  NavSatFix tmpl;
-  tmpl.header.frame_id               = frame_id;
-  tmpl.status.status                 = NavSatStatus::STATUS_FIX;
-  tmpl.status.service                = NavSatStatus::SERVICE_GPS;
-  tmpl.position_covariance_type      = NavSatFix::COVARIANCE_TYPE_UNKNOWN;
-  tmpl.position_covariance           = {0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0};
+  NavSatFix template_msg;
+  template_msg.header.frame_id               = frame_id;
+  template_msg.status.status                 = NavSatStatus::STATUS_FIX;
+  template_msg.status.service                = NavSatStatus::SERVICE_GPS;
+  template_msg.position_covariance_type      = NavSatFix::COVARIANCE_TYPE_UNKNOWN;
+  template_msg.position_covariance           = {0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0};
 
-  return [pub, node_ptr, msg = std::move(tmpl)](
-      const uint8_t* data, uint32_t len, uint64_t ts_ns) mutable
+  return [publisher, node_ptr, msg = std::move(template_msg)](
+      const uint8_t* data, uint32_t len, uint64_t timestamp_ns) mutable
   {
     if (len < PAYLOAD_SIZE) return;
 
     double vals[3];
     std::memcpy(vals, data, PAYLOAD_SIZE);
 
-    msg.header.stamp = rclcpp::Time(static_cast<int64_t>(ts_ns));
+    msg.header.stamp = rclcpp::Time(static_cast<int64_t>(timestamp_ns));
     msg.latitude     = vals[0];
     msg.longitude    = vals[1];
     msg.altitude     = vals[2];
 
-    pub->publish(msg);
+    publisher->publish(msg);
   };
 }
 
@@ -731,37 +733,37 @@ static BlobPublishFn make_nav_sat_fix_factory(
 static BlobPublishFn make_range_factory(
     rclcpp::Node& node,
     const std::string& topic,
-    const SensorConfig& cfg)
+    const SensorConfig& sensor_config)
 {
   using sensor_msgs::msg::Range;
 
-  auto pub      = node.create_publisher<Range>(topic, 10);
-  const std::string frame_id = cfg.frame_id.empty() ? std::string(node.get_name()) : cfg.frame_id;
+  auto publisher = node.create_publisher<Range>(topic, 10);
+  const std::string frame_id = config_frame_id(node, sensor_config.frame_id);
 
   static constexpr uint32_t PAYLOAD_SIZE = 1 + 4 * sizeof(float);  // 17 bytes
 
-  Range tmpl;
-  tmpl.header.frame_id   = frame_id;
-  tmpl.radiation_type    = Range::ULTRASOUND;
-  tmpl.field_of_view    = 0.1f;
-  tmpl.min_range        = 0.0f;
-  tmpl.max_range        = 0.0f;
-  tmpl.range            = 0.0f;
+  Range template_msg;
+  template_msg.header.frame_id   = frame_id;
+  template_msg.radiation_type    = Range::ULTRASOUND;
+  template_msg.field_of_view    = 0.1f;
+  template_msg.min_range        = 0.0f;
+  template_msg.max_range        = 0.0f;
+  template_msg.range            = 0.0f;
 
-  return [pub, msg = std::move(tmpl)](
-      const uint8_t* data, uint32_t len, uint64_t ts_ns) mutable
+  return [publisher, msg = std::move(template_msg)](
+      const uint8_t* data, uint32_t len, uint64_t timestamp_ns) mutable
   {
     if (len < PAYLOAD_SIZE) return;
 
     uint32_t pos = 0;
-    msg.header.stamp     = rclcpp::Time(static_cast<int64_t>(ts_ns));
+    msg.header.stamp     = rclcpp::Time(static_cast<int64_t>(timestamp_ns));
     msg.radiation_type   = data[pos]; pos += 1;
     msg.field_of_view    = read_f32(data, &pos);
     msg.min_range        = read_f32(data, &pos);
     msg.max_range        = read_f32(data, &pos);
     msg.range            = read_f32(data, &pos);
 
-    pub->publish(msg);
+    publisher->publish(msg);
   };
 }
 
@@ -776,82 +778,93 @@ static uint32_t image_row_step_bytes(const std::string& encoding, uint32_t width
 BlobPublishFn make_camera_sensor_factory(
     rclcpp::Node& node,
     const std::string& topic,
-    const SensorConfig& cfg,
+    const SensorConfig& sensor_config,
     const std::string& encoding,
     uint32_t width,
     uint32_t height)
 {
   using sensor_msgs::msg::Image;
 
-  auto pub = node.create_publisher<Image>(topic, 10);
-  const std::string frame_id = cfg.frame_id.empty() ? std::string(node.get_name()) : cfg.frame_id;
+  auto publisher = node.create_publisher<Image>(topic, 10);
+  const std::string frame_id = config_frame_id(node, sensor_config.frame_id);
 
   const uint32_t step = image_row_step_bytes(encoding, width);
   const uint32_t max_bytes = step * height;
 
-  Image tmpl;
-  tmpl.header.frame_id = frame_id;
-  tmpl.height          = height;
-  tmpl.width           = width;
-  tmpl.encoding        = encoding;
-  tmpl.is_bigendian    = 0;
-  tmpl.step            = step;
-  tmpl.data.resize(max_bytes);
+  Image template_msg;
+  template_msg.header.frame_id = frame_id;
+  template_msg.height          = height;
+  template_msg.width           = width;
+  template_msg.encoding        = encoding;
+  template_msg.is_bigendian    = 0;
+  template_msg.step            = step;
+  template_msg.data.resize(max_bytes);
 
-  return [pub, msg = std::move(tmpl)](
-      const uint8_t* data, uint32_t len, uint64_t ts_ns) mutable
+  return [publisher, msg = std::move(template_msg)](
+      const uint8_t* data, uint32_t len, uint64_t timestamp_ns) mutable
   {
     if (len == 0) return;
-    msg.header.stamp = rclcpp::Time(static_cast<int64_t>(ts_ns));
+
+    msg.header.stamp = rclcpp::Time(static_cast<int64_t>(timestamp_ns));
+    
     if (msg.data.size() != len) msg.data.resize(len);
     std::memcpy(msg.data.data(), data, len);
-    pub->publish(msg);
+    publisher->publish(msg);
   };
 }
 
 static BlobPublishFn make_mesh_sensor_factory(
     rclcpp::Node& node,
     const std::string& topic,
-    const SensorConfig& cfg)
+    const SensorConfig& sensor_config)
 {
   using beamng_msgs::msg::MeshSensor;
   using beamng_msgs::msg::MeshSensorNode;
   using beamng_msgs::msg::MeshSensorBeam;
 
-  auto pub = node.create_publisher<MeshSensor>(topic, 10);
-  const std::string frame_id = cfg.frame_id.empty() ? std::string(node.get_name()) : cfg.frame_id;
+  auto publisher = node.create_publisher<MeshSensor>(topic, 10);
+  const std::string frame_id = config_frame_id(node, sensor_config.frame_id);
   // Reuse one message to avoid per-publish allocations (nodes/beams vectors keep capacity after clear).
   MeshSensor msg;
 
-  return [pub, frame_id, msg](const uint8_t* data, uint32_t len, uint64_t ts_ns) mutable
+  return [publisher, frame_id, msg](const uint8_t* data, uint32_t len, uint64_t timestamp_ns) mutable
   {
-    msg.header.stamp    = rclcpp::Time(static_cast<int64_t>(ts_ns));
+    msg.header.stamp    = rclcpp::Time(static_cast<int64_t>(timestamp_ns));
     msg.header.frame_id = frame_id;
     msg.nodes.clear();
     msg.beams.clear();
 
     uint32_t pos = 0;
     if (pos + sizeof(uint32_t) > len) return;
+
     const uint32_t node_count = read_u32(data, &pos);
     msg.nodes.reserve(node_count);
 
     for (uint32_t i = 0; i < node_count && pos + 80 <= len; ++i) {
       MeshSensorNode n;
-      const double* d = reinterpret_cast<const double*>(data + pos);
-      n.pos.x   = d[0]; n.pos.y   = d[1]; n.pos.z   = d[2];
-      n.vel.x   = d[3]; n.vel.y   = d[4]; n.vel.z   = d[5];
-      n.force.x = d[6]; n.force.y = d[7]; n.force.z = d[8];
-      n.mass    = d[9];
+      const double* values = reinterpret_cast<const double*>(data + pos);
+      n.pos.x   = values[0]; n.pos.y   = values[1]; n.pos.z   = values[2];
+      n.vel.x   = values[3]; n.vel.y   = values[4]; n.vel.z   = values[5];
+      n.force.x = values[6]; n.force.y = values[7]; n.force.z = values[8];
+      n.mass    = values[9];
       pos += 80; // 80 bytes per node
       n.part_origin = read_str(data, &pos);
       msg.nodes.push_back(std::move(n));
     }
 
-    if (pos + sizeof(uint32_t) > len) { pub->publish(msg); return; }
+    if (pos + sizeof(uint32_t) > len) {
+      publisher->publish(msg);
+      return;
+    }
+    
     const uint32_t beam_count = read_u32(data, &pos);
     msg.beams.reserve(beam_count);
-    if (pos + beam_count * sizeof(double) > len) { pub->publish(msg); return; }
+    if (pos + beam_count * sizeof(double) > len) {
+      publisher->publish(msg); return;
+    }
+    
     const double* beam_stresses = reinterpret_cast<const double*>(data + pos);
+    
     for (uint32_t i = 0; i < beam_count; ++i) {
       MeshSensorBeam b;
       b.stress = beam_stresses[i];
@@ -859,7 +872,7 @@ static BlobPublishFn make_mesh_sensor_factory(
     }
     pos += beam_count * sizeof(double);
 
-    pub->publish(msg);
+    publisher->publish(msg);
   };
 }
 
@@ -868,13 +881,13 @@ void register_all_sensor_factories() {
   auto& reg = SensorFactoryRegistry::instance();
 
   // Scalar factories - one entry per beamng_msgs message type.
-  #define REGISTER(MsgType) \
-    reg.register_factory(#MsgType, \
+  #define REGISTER(MessageTypeype) \
+    reg.register_factory(#MessageTypeype, \
       [](rclcpp::Node& node, const std::string& topic, \
-          const SensorConfig& cfg, \
+          const SensorConfig& sensor_config, \
           uint32_t scalar_base_idx, uint32_t string_base_idx) -> ScalarRegisterResult { \
-        return make_generic_factory<MsgType>( \
-            node, topic, cfg, scalar_base_idx, string_base_idx); \
+        return make_generic_factory<MessageTypeype>( \
+            node, topic, sensor_config, scalar_base_idx, string_base_idx); \
       })
 
   REGISTER(ElectricsSensor);

@@ -40,10 +40,10 @@ BNG_ROS2_API char bngros2_spin_beamng_node() {
   return true;
 }
 
-BNG_ROS2_API void bngros2_receive_config(const char* json) {
-  if (!json) {
+BNG_ROS2_API void bngros2_receive_config(const char* config_as_json) {
+  if (!config_as_json || strlen(config_as_json) == 0) {
     std::cerr << "[ROS2 ERROR] bngros2_receive_config: null config.\n";
     return;
   }
-  bng_ros2::SensorRegistry::instance().load(json);
+  bng_ros2::SensorRegistry::instance().load(config_as_json);
 }

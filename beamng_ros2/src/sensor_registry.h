@@ -8,8 +8,7 @@ namespace bng_ros2 {
 
 struct SensorFieldConfig {
   std::string name;
-  // Dot-separated path into the Lua global table (e.g. "electrics.values.rpm").
-  // Used only for Scalar sensors.
+  // Dot-separated path into the Lua global table (e.g. "electrics.values.rpm"), used only for Scalar sensors.
   std::string path;
 };
 

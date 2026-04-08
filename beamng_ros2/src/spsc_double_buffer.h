@@ -32,23 +32,23 @@ struct SpscDoubleBuffer {
   // Condition variable used by the publish thread to sleep when there is no data, eliminating the busy-spin CPU cost.
   // notify() is called by commit().
   // The mutex is only contended at the sleep/wake boundary, not on the hot path.
-  std::mutex              cv_mutex_;
-  std::condition_variable cv_;
+  std::mutex              condition_variable_mutex_;
+  std::condition_variable condition_variable_;
 
   SpscDoubleBuffer() = default;
 
   // std::atomic and std::condition_variable are not movable, so we provide explicit
   // move operations that transfer slot data and reset synchronisation state.
   // Safe only during init before any concurrent access.
-  SpscDoubleBuffer(SpscDoubleBuffer&& o) noexcept
-      : slot{std::move(o.slot[0]), std::move(o.slot[1])},
-        state_{o.state_.load(std::memory_order_relaxed)} {}
+  SpscDoubleBuffer(SpscDoubleBuffer&& other) noexcept
+      : slot{std::move(other.slot[0]), std::move(other.slot[1])},
+        state_{other.state_.load(std::memory_order_relaxed)} {}
 
-  SpscDoubleBuffer& operator=(SpscDoubleBuffer&& o) noexcept {
-    if (this != &o) {
-      slot[0] = std::move(o.slot[0]);
-      slot[1] = std::move(o.slot[1]);
-      state_.store(o.state_.load(std::memory_order_relaxed), std::memory_order_relaxed);
+  SpscDoubleBuffer& operator=(SpscDoubleBuffer&& other) noexcept {
+    if (this != &other) {
+      slot[0] = std::move(other.slot[0]);
+      slot[1] = std::move(other.slot[1]);
+      state_.store(other.state_.load(std::memory_order_relaxed), std::memory_order_relaxed);
     }
     return *this;
   }
@@ -67,14 +67,14 @@ struct SpscDoubleBuffer {
     const uint32_t prev  = state_.load(std::memory_order_relaxed);
     const uint32_t next  = (prev ^ 1u) | 2u;  // flip bit 0 (write_idx), set bit 1 (dirty)
     state_.store(next, std::memory_order_release);
-    cv_.notify_one();
+    condition_variable_.notify_one();
   }
 
   // Reader side: returns true immediately if dirty, otherwise blocks until commit() is called or the timeout expires.
   bool wait_for_data(std::chrono::microseconds max_wait = std::chrono::microseconds(500)) {
     if (state_.load(std::memory_order_acquire) & 2u) return true;
-    std::unique_lock<std::mutex> lk(cv_mutex_);
-    cv_.wait_for(lk, max_wait, [this]{ return (state_.load(std::memory_order_acquire) & 2u) != 0; });
+    std::unique_lock<std::mutex> lk(condition_variable_mutex_);
+    condition_variable_.wait_for(lk, max_wait, [this]{ return (state_.load(std::memory_order_acquire) & 2u) != 0; });
     return (state_.load(std::memory_order_acquire) & 2u) != 0;
   }
 

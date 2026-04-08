@@ -30,23 +30,23 @@ size_t camera_shmem_byte_size(std::string_view role, uint32_t width, uint32_t he
 }
 
 void copy_rgba8_to_rgb8(const uint8_t* rgba, uint8_t* rgb, size_t pixel_count) {
-  const uint8_t* s = rgba;
-  uint8_t* d = rgb;
+  const uint8_t* source = rgba;
+  uint8_t* destination = rgb;
   for (size_t i = 0; i < pixel_count; ++i) {
-    d[0] = s[0];
-    d[1] = s[1];
-    d[2] = s[2];
-    s += 4;
-    d += 3;
+    destination[0] = source[0];
+    destination[1] = source[1];
+    destination[2] = source[2];
+
+    source += 4;
+    destination += 3;
   }
 }
 
-}  // namespace
+}
 
 namespace bng_ros2 {
 
-VehicleNode::VehicleNode(const std::string& name)
-    : Node(name, "beamng_bridge"), name_(name) {
+VehicleNode::VehicleNode(const std::string& name) : Node(name, "beamng_bridge"), name_(name) {
   tf_broadcaster_ = std::make_unique<tf2_ros::TransformBroadcaster>(*this);
   visualizer_ = create_publisher<visualization_msgs::msg::MarkerArray>("~/marker", 10);
   control_sub_ = create_subscription<beamng_msgs::msg::VehicleControl>(
@@ -126,15 +126,15 @@ void VehicleNode::init_sensor_publishers() {
         const uint32_t max_bytes = sensor.blob_layout.max_bytes;
         if (max_bytes > 0) {
           slot.max_blob_bytes = max_bytes;
-          slot.buf.slot[0].resize(max_bytes);
-          slot.buf.slot[1].resize(max_bytes);
+          slot.buffer.slot[0].resize(max_bytes);
+          slot.buffer.slot[1].resize(max_bytes);
         }
 
-        const uint32_t img_w = sensor.blob_layout.width  > 0 ? sensor.blob_layout.width  : 512u;
-        const uint32_t img_h = sensor.blob_layout.height > 0 ? sensor.blob_layout.height : 512u;
+        const uint32_t img_width = sensor.blob_layout.width  > 0 ? sensor.blob_layout.width  : 512u;
+        const uint32_t img_height = sensor.blob_layout.height > 0 ? sensor.blob_layout.height : 512u;
 
-        CameraSlot cam;
-        cam.min_publish_interval =
+        CameraSlot camera_slot;
+        camera_slot.min_publish_interval =
             interval_ns_for_fixed_publish_hz(sensor.blob_layout.publish_mode, sensor.blob_layout.publish_rate_hz);
 
         const auto& stream_specs = sensor.blob_layout.image_streams;
@@ -142,11 +142,11 @@ void VehicleNode::init_sensor_publishers() {
           const auto add_stream = [&](const std::string& topic, const std::string& role,
                                       const std::string& enc) {
             CameraShmemStream stream{};
-            stream.width = img_w;
-            stream.height = img_h;
+            stream.width = img_width;
+            stream.height = img_height;
             stream.role = role;
-            stream.publish_fn = make_camera_sensor_factory(*this, topic, sensor, enc, img_w, img_h);
-            cam.streams.push_back(std::move(stream));
+            stream.publish_fn = make_camera_sensor_factory(*this, topic, sensor, enc, img_width, img_height);
+            camera_slot.streams.push_back(std::move(stream));
           };
 
           if (stream_specs.empty()) {
@@ -160,8 +160,8 @@ void VehicleNode::init_sensor_publishers() {
               add_stream(topic, spec.role, enc);
             }
           }
-          const size_t stream_count = cam.streams.size();
-          camera_slots_[slot_idx] = std::move(cam);
+          const size_t stream_count = camera_slot.streams.size();
+          camera_slots_[slot_idx] = std::move(camera_slot);
           std::cout << "[ROS2 INFO] camera publisher: sensor '" << sensor.id
                     << "' slot " << slot_idx << " streams=" << stream_count << "\n";
         } catch (const std::exception& e) {
@@ -186,8 +186,8 @@ void VehicleNode::init_sensor_publishers() {
       const uint32_t max_bytes = sensor.blob_layout.max_bytes;
       if (max_bytes > 0) {
         slot.max_blob_bytes = max_bytes;
-        slot.buf.slot[0].resize(max_bytes);
-        slot.buf.slot[1].resize(max_bytes);
+        slot.buffer.slot[0].resize(max_bytes);
+        slot.buffer.slot[1].resize(max_bytes);
       }
 
       try {
@@ -203,16 +203,16 @@ void VehicleNode::init_sensor_publishers() {
 
     } else {
       const std::string topic = "/beamng_bridge/" + name_ + "/" + sensor.id;
-      const RegisterFn* sfac = factory_reg.find(sensor.msg_file);
+      const RegisterFn* scalar_factory = factory_reg.find(sensor.msg_file);
 
-      if (!sfac) {
+      if (!scalar_factory) {
         std::cerr << "[ROS2 WARN] VehicleNode: no scalar factory for msgFile '"
                   << sensor.msg_file << "' (sensor '" << sensor.id << "'), skipping.\n";
         continue;
       }
 
       try {
-        auto result = (*sfac)(*this, topic, sensor, scalar_cursor, string_cursor);
+        auto result = (*scalar_factory)(*this, topic, sensor, scalar_cursor, string_cursor);
         publish_fns_.push_back(std::move(result.publish_fn));
         std::cout << "[ROS2 INFO] scalar publisher: sensor '" << sensor.id
                   << "' on '" << topic
@@ -263,9 +263,7 @@ void VehicleNode::set_data(double scale[3], double color[4], double arrow_color[
   marker_dirty_ = true;
 }
 
-uint32_t VehicleNode::register_frame_layout(const char* const* sensor_ids,
-                                              const char* const* field_names,
-                                              uint32_t count) {
+uint32_t VehicleNode::register_frame_layout(const char* const* sensor_ids, const char* const* field_names, uint32_t count) {
   (void)sensor_ids;
   (void)field_names;
 
@@ -286,27 +284,24 @@ uint32_t VehicleNode::register_frame_layout(const char* const* sensor_ids,
 void VehicleNode::push_frame(const double* values, uint32_t count) {
   const uint32_t n = std::min(count, static_cast<uint32_t>(frame_layout_.size()));
   if (n == 0) return;
-  ScalarStore& ws = scalar_buf_.write_slot();
-  std::memcpy(ws.data(), values, static_cast<size_t>(n) * sizeof(double));
+  ScalarStore& write_slot = scalar_buf_.write_slot();
+  std::memcpy(write_slot.data(), values, static_cast<size_t>(n) * sizeof(double));
   scalar_buf_.commit();
 }
 
-void VehicleNode::set_sensor_field_string(std::string_view sensor_id,
-                                            std::string_view field_name,
-                                            std::string_view value) {
+void VehicleNode::set_sensor_field_string(std::string_view sensor_id, std::string_view field_name, std::string_view value) {
   // Construct the composite key on the stack, then build a std::string only if the lengths fit.
-  // MSVC 2019 (C++17) does not support heterogeneous unordered_map lookup, so a proper std::string key is required for find().
-  char key_buf[256];
+  char key_buffer[256];
   const size_t id_len    = sensor_id.size();
   const size_t field_len = field_name.size();
-  if (id_len + field_len + 2 > sizeof(key_buf)) return;
+  if (id_len + field_len + 2 > sizeof(key_buffer)) return;
 
-  std::memcpy(key_buf, sensor_id.data(), id_len);
-  key_buf[id_len]     = ':';
-  key_buf[id_len + 1] = ':';
-  std::memcpy(key_buf + id_len + 2, field_name.data(), field_len);
+  std::memcpy(key_buffer, sensor_id.data(), id_len);
+  key_buffer[id_len]     = ':';
+  key_buffer[id_len + 1] = ':';
+  std::memcpy(key_buffer + id_len + 2, field_name.data(), field_len);
   // Construct the key string once from the stack buffer - single allocation.
-  const std::string key(key_buf, id_len + 2 + field_len);
+  const std::string key(key_buffer, id_len + 2 + field_len);
   auto it = string_field_index_.find(key);
   if (it == string_field_index_.end()) return;
 
@@ -315,25 +310,24 @@ void VehicleNode::set_sensor_field_string(std::string_view sensor_id,
   string_buf_.write_slot()[it->second] = std::string(value);
 }
 
-uint32_t VehicleNode::register_blob_sensors(const char* const* sensor_ids,
-                                              uint32_t count) {
+uint32_t VehicleNode::register_blob_sensors(const char* const* sensor_ids, uint32_t count) {
   // Verify that each id was already indexed by init_sensor_publishers.
   // The sensor_ids here are rosConfig sensor IDs (e.g. "lidar_front"), not engine-level IDs.
-  uint32_t registered = 0;
+  uint32_t registered_count = 0;
   for (uint32_t i = 0; i < count; ++i) {
-    const std::string id(sensor_ids[i]);
-    if (blob_sensor_index_.find(id) != blob_sensor_index_.end()) {
-      ++registered;
+    const std::string sensor_id(sensor_ids[i]);
+    if (blob_sensor_index_.find(sensor_id) != blob_sensor_index_.end()) {
+      ++registered_count;
     } else {
-      std::cerr << "[ROS2 WARN] register_blob_sensors: sensor id '" << id
+      std::cerr << "[ROS2 WARN] register_blob_sensors: sensor id '" << sensor_id
                 << "' not found in blob_sensor_index_. "
                     "Check that it is declared as dataMode=blob in the config.\n";
     }
   }
-  return registered;
+  return registered_count;
 }
 
-void VehicleNode::push_blobs_batch(const BngBlobDesc* descs, uint32_t count) {
+void VehicleNode::push_blobs_batch(const BngBlobDesc* blob_descriptions, uint32_t count) {
   // Guard: avoid dereferencing if no blob slots (e.g. node created before config loaded).
   if (blob_slots_.empty() || count == 0) return;
 
@@ -341,31 +335,31 @@ void VehicleNode::push_blobs_batch(const BngBlobDesc* descs, uint32_t count) {
   // This ensures the publish thread never wakes to a state where some slots have new data and
   // others still hold stale data from the previous frame.
   for (uint32_t i = 0; i < count; ++i) {
-    const BngBlobDesc& d = descs[i];
-    if (d.sensor_idx >= blob_slots_.size()) continue;
-    BlobSlot& slot = blob_slots_[d.sensor_idx];
+    const BngBlobDesc& blob_desc = blob_descriptions[i];
+    if (blob_desc.sensor_idx >= blob_slots_.size()) continue;
+    BlobSlot& blob_slot = blob_slots_[blob_desc.sensor_idx];
 
-    if (d.data == nullptr) continue;
+    if (blob_desc.data == nullptr) continue;
 
-    uint32_t payload = d.byte_len;
-    if (slot.max_blob_bytes > 0 && payload > slot.max_blob_bytes) {
-      payload = slot.max_blob_bytes;
+    uint32_t payload = blob_desc.byte_len;
+    if (blob_slot.max_blob_bytes > 0 && payload > blob_slot.max_blob_bytes) {
+      payload = blob_slot.max_blob_bytes;
     }
 
-    std::vector<uint8_t>& ws = slot.buf.write_slot();
+    std::vector<uint8_t>& write_slot = blob_slot.buffer.write_slot();
     // Grow only if payload exceeds pre-allocated capacity (should not happen in normal use).
-    if (payload > ws.size()) ws.resize(payload);
+    if (payload > write_slot.size()) write_slot.resize(payload);
     if (payload > 0) {
-      std::memcpy(ws.data(), d.data, payload);
+      std::memcpy(write_slot.data(), blob_desc.data, payload);
     }
-    slot.timestamp_ns.store(d.timestamp_ns, std::memory_order_relaxed);
-    slot.actual_byte_len.store(payload, std::memory_order_relaxed);
+    blob_slot.timestamp_ns.store(blob_desc.timestamp_ns, std::memory_order_relaxed);
+    blob_slot.actual_byte_len.store(payload, std::memory_order_relaxed);
   }
   // Commit all written slots after all memcpys are done.
   for (uint32_t i = 0; i < count; ++i) {
-    const BngBlobDesc& d = descs[i];
-    if (d.sensor_idx < blob_slots_.size()) {
-      blob_slots_[d.sensor_idx].buf.commit();
+    const BngBlobDesc& blob_desc = blob_descriptions[i];
+    if (blob_desc.sensor_idx < blob_slots_.size()) {
+      blob_slots_[blob_desc.sensor_idx].buffer.commit();
     }
   }
   // Wake the publish thread once after all slots are committed.
@@ -380,13 +374,15 @@ void VehicleNode::set_camera_streams(uint32_t sensor_idx, const BngCameraStreamD
     std::cerr << "[ROS2 WARN] set_camera_streams: unknown camera slot index " << sensor_idx << ".\n";
     return;
   }
-  CameraSlot& cam = it->second;
+  CameraSlot& camera_slot = it->second;
   for (uint32_t i = 0; i < count; ++i) {
     const BngCameraStreamDesc& desc = streams[i];
-    if (desc.stream_index >= cam.streams.size()) continue;
-    CameraShmemStream& stream = cam.streams[desc.stream_index];
+    if (desc.stream_index >= camera_slot.streams.size()) continue;
+
+    CameraShmemStream& stream = camera_slot.streams[desc.stream_index];
     stream.width = desc.width;
     stream.height = desc.height;
+
     const std::string shmem_name = desc.shmem_name ? desc.shmem_name : "";
     const size_t region_bytes = camera_shmem_byte_size(stream.role, desc.width, desc.height);
     if (!stream.reader.open(shmem_name, region_bytes)) {
@@ -394,6 +390,7 @@ void VehicleNode::set_camera_streams(uint32_t sensor_idx, const BngCameraStreamD
                 << "' (size " << region_bytes << ").\n";
       continue;
     }
+    
     if (stream.role == "colour") {
       stream.convert_buf.resize(static_cast<size_t>(desc.width) * desc.height * 3u);
     }
@@ -413,7 +410,7 @@ void VehicleNode::stop_publish_thread() {
   if (!running_.load()) return;
   running_.store(false);
   // Wake the thread on both CVs so it can observe running_=false and exit cleanly.
-  scalar_buf_.cv_.notify_all();
+  scalar_buf_.condition_variable_.notify_all();
   blob_cv_.notify_all();
   if (publish_thread_.joinable()) publish_thread_.join();
 }
@@ -495,8 +492,7 @@ void VehicleNode::publish_loop() {
           if (role == "colour") {
             const size_t pixels = static_cast<size_t>(shmem_stream.width) * shmem_stream.height;
             copy_rgba8_to_rgb8(shmem, shmem_stream.convert_buf.data(), pixels);
-            shmem_stream.publish_fn(shmem_stream.convert_buf.data(), static_cast<uint32_t>(pixels * 3u),
-                                    static_cast<uint64_t>(stamp_ns));
+            shmem_stream.publish_fn(shmem_stream.convert_buf.data(), static_cast<uint32_t>(pixels * 3u), static_cast<uint64_t>(stamp_ns));
           } else if (role == "annotation") {
             const size_t byte_len = static_cast<size_t>(shmem_stream.width) * shmem_stream.height * 3u;
             shmem_stream.publish_fn(shmem, static_cast<uint32_t>(byte_len), static_cast<uint64_t>(stamp_ns));
@@ -517,14 +513,17 @@ void VehicleNode::publish_loop() {
       blob_dirty_.store(false, std::memory_order_relaxed);
       for (uint32_t i = 0; i < blob_slots_.size(); ++i) {
         if (camera_slots_.count(i)) continue;
-        BlobSlot& slot = blob_slots_[i];
-        if (!slot.buf.is_dirty()) continue;
-        slot.buf.clear_dirty();
-        const std::vector<uint8_t>& data = slot.buf.read_slot();
-        const uint64_t ts  = slot.timestamp_ns.load(std::memory_order_relaxed);
-        const uint32_t len = slot.actual_byte_len.load(std::memory_order_relaxed);
-        if (len > 0 && slot.publish_fn) {
-          slot.publish_fn(data.data(), len, ts);
+
+        BlobSlot& blob_slot = blob_slots_[i];
+        if (!blob_slot.buffer.is_dirty()) continue;
+
+        blob_slot.buffer.clear_dirty();
+        const std::vector<uint8_t>& blob_data = blob_slot.buffer.read_slot();
+        const uint64_t timestamp  = blob_slot.timestamp_ns.load(std::memory_order_relaxed);
+        const uint32_t len = blob_slot.actual_byte_len.load(std::memory_order_relaxed);
+
+        if (len > 0 && blob_slot.publish_fn) {
+          blob_slot.publish_fn(blob_data.data(), len, timestamp);
         }
       }
     }
@@ -653,9 +652,9 @@ BNG_ROS2_API void bngros2_handle_push_blobs_batch(void* handle,
 }
 
 BNG_ROS2_API void bngros2_handle_set_camera_streams(void* handle,
-                                                     uint32_t sensor_idx,
-                                                     const BngCameraStreamDesc* streams,
-                                                     uint32_t count) {
+                                                    uint32_t sensor_idx,
+                                                    const BngCameraStreamDesc* streams,
+                                                    uint32_t count) {
   if (!handle || !streams) return;
   static_cast<bng_ros2::VehicleNode*>(handle)->set_camera_streams(sensor_idx, streams, count);
 }
@@ -674,11 +673,6 @@ BNG_ROS2_API char bngros2_handle_get_control(void* handle, double* steering, dou
   if (!handle) return 0;
   return static_cast<char>(static_cast<bng_ros2::VehicleNode*>(handle)->get_control(
       steering, throttle, brake, parkingbrake, clutch, gear, 300)); // 300ms timeout
-}
-
-BNG_ROS2_API void bngros2_broadcast_tf(uint32_t id, double pos[3], double rot[4]) {
-  auto it = nodes.find(id);
-  if (it != nodes.end()) it->second->broadcast_tf(pos, rot);
 }
 
 BNG_ROS2_API void bngros2_vehicle_set_data(uint32_t id, double scale[3],
@@ -707,27 +701,6 @@ BNG_ROS2_API uint32_t bngros2_register_sensor_fields(uint32_t id,
   }
 }
 
-BNG_ROS2_API void bngros2_vehicle_push_frame(uint32_t id,
-                                              const double* values,
-                                              uint32_t count) {
-  auto it = nodes.find(id);
-  if (it == nodes.end()) return;
-  it->second->push_frame(values, count);
-}
-
-BNG_ROS2_API void bngros2_vehicle_set_sensor_field_string(uint32_t id,
-                                                            const char* sensor_id,
-                                                            const char* field_name,
-                                                            const char* value) {
-  auto it = nodes.find(id);
-  if (it == nodes.end()) return;
-  try {
-    it->second->set_sensor_field_string(sensor_id, field_name, value ? value : "");
-  } catch (std::exception& e) {
-    std::cerr << "[ROS2 ERROR] " << e.what() << "\n";
-  }
-}
-
 BNG_ROS2_API uint32_t bngros2_register_blob_sensors(uint32_t vehicle_id,
                                                       const char* const* sensor_ids,
                                                       uint32_t count) {
@@ -738,17 +711,5 @@ BNG_ROS2_API uint32_t bngros2_register_blob_sensors(uint32_t vehicle_id,
   } catch (std::exception& e) {
     std::cerr << "[ROS2 ERROR] bngros2_register_blob_sensors: " << e.what() << "\n";
     return 0;
-  }
-}
-
-BNG_ROS2_API void bngros2_push_blobs_batch(uint32_t vehicle_id,
-                                            const BngBlobDesc* descs,
-                                            uint32_t count) {
-  auto it = nodes.find(vehicle_id);
-  if (it == nodes.end()) return;
-  try {
-    it->second->push_blobs_batch(descs, count);
-  } catch (std::exception& e) {
-    std::cerr << "[ROS2 ERROR] bngros2_push_blobs_batch: " << e.what() << "\n";
   }
 }
