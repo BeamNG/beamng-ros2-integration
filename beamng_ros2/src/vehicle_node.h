@@ -16,7 +16,7 @@
 #include <visualization_msgs/msg/marker_array.hpp>
 #include "definitions.h"
 #include "sensor_factories.h"
-#include "shmem_reader.h"
+#include "shared_memory_reader.h"
 #include "spsc_double_buffer.h"
 #include "beamng_node.h"
 #include <beamng_msgs/msg/vehicle_control.hpp>
@@ -25,7 +25,7 @@
 
 // FFI: one entry per camera stream; stream_index matches CameraSlot.streams order from init.
 typedef struct BngCameraStreamDesc {
-  const char* shmem_name;
+  const char* shared_memory_name;
   uint32_t    width;
   uint32_t    height;
   uint32_t    stream_index;
@@ -144,9 +144,9 @@ class VehicleNode : public rclcpp::Node {
     std::unordered_map<std::string, uint32_t> blob_sensor_index_;
     std::vector<BlobSlot>                     blob_slots_;
 
-    // One CameraSlot per blob slot index for msgFile Image; Lua opens shmem via set_camera_streams.
-    struct CameraShmemStream {
-      ShmemReader reader;
+    // One CameraSlot per blob slot index for msgFile Image; Lua opens shared_memory via set_camera_streams.
+    struct CameraSharedMemoryStream {
+      SharedMemoryReader reader;
       uint32_t width{0};
       uint32_t height{0};
       std::string role;
@@ -154,7 +154,7 @@ class VehicleNode : public rclcpp::Node {
       std::vector<uint8_t> convert_buf;
     };
     struct CameraSlot {
-      std::vector<CameraShmemStream> streams;
+      std::vector<CameraSharedMemoryStream> streams;
       std::chrono::nanoseconds min_publish_interval{0};
       std::chrono::steady_clock::time_point last_publish{std::chrono::steady_clock::now()};
     };

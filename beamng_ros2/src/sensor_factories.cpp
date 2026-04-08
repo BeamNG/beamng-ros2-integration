@@ -99,7 +99,7 @@ static FieldResolution resolve_field_path(
     if (tail.empty()) {
       return {field_offset, member.type_id_, true};
     }
-    
+
     if (member.type_id_ == intr::ROS_TYPE_MESSAGE && member.members_ != nullptr) {
       const auto* nested = reinterpret_cast<const intr::MessageMembers*>(member.members_->data);
       return resolve_field_path(nested, tail, field_offset);
@@ -774,7 +774,7 @@ static uint32_t image_row_step_bytes(const std::string& encoding, uint32_t width
   return width * 3u;
 }
 
-// Payload is already in ROS row layout; VehicleNode converts engine shmem where needed.
+// Payload is already in ROS row layout; VehicleNode converts engine shared_memory where needed.
 BlobPublishFn make_camera_sensor_factory(
     rclcpp::Node& node,
     const std::string& topic,
@@ -907,7 +907,7 @@ void register_all_sensor_factories() {
   reg.register_blob_factory("IdealRadarSensor",  make_ideal_radar_factory);
   reg.register_blob_factory("MeshSensor",      make_mesh_sensor_factory);
   reg.register_blob_factory("Range",           make_range_factory);
-  // Image (camera): created in VehicleNode::init_sensor_publishers : multi-stream + shmem.
+  // Image (camera): created in VehicleNode::init_sensor_publishers : multi-stream + shared_memory.
 }
 
 }  // namespace bng_ros2

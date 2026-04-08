@@ -23,8 +23,8 @@ std::chrono::nanoseconds interval_ns_for_fixed_publish_hz(const std::string& pub
   return std::chrono::duration_cast<std::chrono::nanoseconds>(std::chrono::duration<double>(period_sec));
 }
 
-// Engine shmem size per stream role (RGBA or float32 plane is 4 bytes per pixel, annotations RGB is 3).
-size_t camera_shmem_byte_size(std::string_view role, uint32_t width, uint32_t height) {
+// Engine shared_memory size per stream role (RGBA or float32 plane is 4 bytes per pixel, annotations RGB is 3).
+size_t camera_shared_memory_byte_size(std::string_view role, uint32_t width, uint32_t height) {
   const size_t pixels = static_cast<size_t>(width) * height;
   return (role == "annotation") ? (pixels * 3u) : (pixels * 4u);
 }
@@ -141,7 +141,7 @@ void VehicleNode::init_sensor_publishers() {
         try {
           const auto add_stream = [&](const std::string& topic, const std::string& role,
                                       const std::string& enc) {
-            CameraShmemStream stream{};
+            CameraSharedMemoryStream stream{};
             stream.width = img_width;
             stream.height = img_height;
             stream.role = role;
@@ -379,14 +379,14 @@ void VehicleNode::set_camera_streams(uint32_t sensor_idx, const BngCameraStreamD
     const BngCameraStreamDesc& desc = streams[i];
     if (desc.stream_index >= camera_slot.streams.size()) continue;
 
-    CameraShmemStream& stream = camera_slot.streams[desc.stream_index];
+    CameraSharedMemoryStream& stream = camera_slot.streams[desc.stream_index];
     stream.width = desc.width;
     stream.height = desc.height;
 
-    const std::string shmem_name = desc.shmem_name ? desc.shmem_name : "";
-    const size_t region_bytes = camera_shmem_byte_size(stream.role, desc.width, desc.height);
-    if (!stream.reader.open(shmem_name, region_bytes)) {
-      std::cerr << "[ROS2 WARN] set_camera_streams: failed to open shmem '" << shmem_name
+    const std::string shared_memory_name = desc.shared_memory_name ? desc.shared_memory_name : "";
+    const size_t region_bytes = camera_shared_memory_byte_size(stream.role, desc.width, desc.height);
+    if (!stream.reader.open(shared_memory_name, region_bytes)) {
+      std::cerr << "[ROS2 WARN] set_camera_streams: failed to open shared_memory '" << shared_memory_name
                 << "' (size " << region_bytes << ").\n";
       continue;
     }
@@ -395,7 +395,7 @@ void VehicleNode::set_camera_streams(uint32_t sensor_idx, const BngCameraStreamD
       stream.convert_buf.resize(static_cast<size_t>(desc.width) * desc.height * 3u);
     }
     std::cout << "[ROS2 INFO] camera slot " << sensor_idx << " stream " << desc.stream_index
-              << " shmem '" << shmem_name << "' " << desc.width << "x" << desc.height
+              << " shared_memory '" << shared_memory_name << "' " << desc.width << "x" << desc.height
               << " role=" << stream.role << "\n";
   }
 }
@@ -485,20 +485,20 @@ void VehicleNode::publish_loop() {
         }
         camera.last_publish = steady_now;
 
-        for (auto& shmem_stream : camera.streams) {
-          if (!shmem_stream.publish_fn || !shmem_stream.reader.is_open()) continue;
-          const uint8_t* shmem = shmem_stream.reader.data();
-          const std::string& role = shmem_stream.role;
+        for (auto& shared_memory_stream : camera.streams) {
+          if (!shared_memory_stream.publish_fn || !shared_memory_stream.reader.is_open()) continue;
+          const uint8_t* shared_memory = shared_memory_stream.reader.data();
+          const std::string& role = shared_memory_stream.role;
           if (role == "colour") {
-            const size_t pixels = static_cast<size_t>(shmem_stream.width) * shmem_stream.height;
-            copy_rgba8_to_rgb8(shmem, shmem_stream.convert_buf.data(), pixels);
-            shmem_stream.publish_fn(shmem_stream.convert_buf.data(), static_cast<uint32_t>(pixels * 3u), static_cast<uint64_t>(stamp_ns));
+            const size_t pixels = static_cast<size_t>(shared_memory_stream.width) * shared_memory_stream.height;
+            copy_rgba8_to_rgb8(shared_memory, shared_memory_stream.convert_buf.data(), pixels);
+            shared_memory_stream.publish_fn(shared_memory_stream.convert_buf.data(), static_cast<uint32_t>(pixels * 3u), static_cast<uint64_t>(stamp_ns));
           } else if (role == "annotation") {
-            const size_t byte_len = static_cast<size_t>(shmem_stream.width) * shmem_stream.height * 3u;
-            shmem_stream.publish_fn(shmem, static_cast<uint32_t>(byte_len), static_cast<uint64_t>(stamp_ns));
+            const size_t byte_len = static_cast<size_t>(shared_memory_stream.width) * shared_memory_stream.height * 3u;
+            shared_memory_stream.publish_fn(shared_memory, static_cast<uint32_t>(byte_len), static_cast<uint64_t>(stamp_ns));
           } else if (role == "depth" || role == "instance") {
-            const size_t byte_len = static_cast<size_t>(shmem_stream.width) * shmem_stream.height * 4u;
-            shmem_stream.publish_fn(shmem, static_cast<uint32_t>(byte_len), static_cast<uint64_t>(stamp_ns));
+            const size_t byte_len = static_cast<size_t>(shared_memory_stream.width) * shared_memory_stream.height * 4u;
+            shared_memory_stream.publish_fn(shared_memory, static_cast<uint32_t>(byte_len), static_cast<uint64_t>(stamp_ns));
           }
         }
       }

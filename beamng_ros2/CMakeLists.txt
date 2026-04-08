@@ -40,7 +40,7 @@ add_library(${BEAMNG_LIBRARY} SHARED
   src/vehicle_node.cpp
   src/sensor_registry.cpp
   src/sensor_factories.cpp
-  src/shmem_reader.cpp
+  src/shared_memory_reader.cpp
 )
 target_include_directories(${BEAMNG_LIBRARY} PUBLIC
   $<BUILD_INTERFACE:${CMAKE_CURRENT_SOURCE_DIR}/include>

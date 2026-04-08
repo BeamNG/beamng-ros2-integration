@@ -7,14 +7,14 @@ namespace bng_ros2 {
 
 // Cross-platform open/read/close for named shared memory (engine writes, we read).
 // Used for camera Image sensors in the beamngpy-style streaming workflow.
-class ShmemReader {
+class SharedMemoryReader {
   public:
-    ShmemReader() = default;
-    ~ShmemReader();
-    ShmemReader(ShmemReader&&) noexcept;
-    ShmemReader& operator=(ShmemReader&&) noexcept;
-    ShmemReader(const ShmemReader&) = delete;
-    ShmemReader& operator=(const ShmemReader&) = delete;
+    SharedMemoryReader() = default;
+    ~SharedMemoryReader();
+    SharedMemoryReader(SharedMemoryReader&&) noexcept;
+    SharedMemoryReader& operator=(SharedMemoryReader&&) noexcept;
+    SharedMemoryReader(const SharedMemoryReader&) = delete;
+    SharedMemoryReader& operator=(const SharedMemoryReader&) = delete;
 
     // Open existing named shared memory for read. Returns true on success.
     bool open(const std::string& name, size_t size_bytes);

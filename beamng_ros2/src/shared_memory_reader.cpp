@@ -1,4 +1,4 @@
-#include "shmem_reader.h"
+#include "shared_memory_reader.h"
 
 #if defined(_WIN32) || defined(_WIN64)
 #define WIN32_LEAN_AND_MEAN
@@ -14,7 +14,7 @@ namespace bng_ros2 {
 
 #if defined(_WIN32) || defined(_WIN64)
 
-bool ShmemReader::open(const std::string& name, size_t size_bytes) {
+bool SharedMemoryReader::open(const std::string& name, size_t size_bytes) {
   close();
   HANDLE handle = ::OpenFileMappingA(FILE_MAP_READ, FALSE, name.c_str());
   if (!handle || handle == INVALID_HANDLE_VALUE) return false;
@@ -31,7 +31,7 @@ bool ShmemReader::open(const std::string& name, size_t size_bytes) {
   return true;
 }
 
-void ShmemReader::close() {
+void SharedMemoryReader::close() {
   if (ptr_) {
     ::UnmapViewOfFile(ptr_);
     ptr_ = nullptr;
@@ -46,7 +46,7 @@ void ShmemReader::close() {
 
 #else
 
-bool ShmemReader::open(const std::string& name, size_t size_bytes) {
+bool SharedMemoryReader::open(const std::string& name, size_t size_bytes) {
   close();
   int file_descriptor = ::shm_open(name.c_str(), O_RDONLY, 0666);
   if (file_descriptor < 0) return false;
@@ -62,7 +62,7 @@ bool ShmemReader::open(const std::string& name, size_t size_bytes) {
   return true;
 }
 
-void ShmemReader::close() {
+void SharedMemoryReader::close() {
   if (ptr_ && size_ > 0) {
     ::munmap(ptr_, size_);
   }
@@ -74,17 +74,17 @@ void ShmemReader::close() {
 
 #endif
 
-ShmemReader::~ShmemReader() {
+SharedMemoryReader::~SharedMemoryReader() {
   close();
 }
 
-ShmemReader::ShmemReader(ShmemReader&& other) noexcept : handle_(other.handle_), ptr_(other.ptr_), size_(other.size_) {
+SharedMemoryReader::SharedMemoryReader(SharedMemoryReader&& other) noexcept : handle_(other.handle_), ptr_(other.ptr_), size_(other.size_) {
   other.handle_ = nullptr;
   other.ptr_ = nullptr;
   other.size_ = 0;
 }
 
-ShmemReader& ShmemReader::operator=(ShmemReader&& other) noexcept {
+SharedMemoryReader& SharedMemoryReader::operator=(SharedMemoryReader&& other) noexcept {
   if (this != &other) {
     close();
     handle_ = other.handle_;
