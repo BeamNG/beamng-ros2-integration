@@ -311,10 +311,9 @@ static BlobPublishFn make_dynamic_array_factory(
     std::vector<std::vector<std::function<void(MessageType&, const uint8_t*, uint32_t*)>>> section_readers)
 {
   auto publisher = node.create_publisher<MessageType>(topic, 10);
-  auto node_ptr = node.shared_from_this();
   const std::string frame_id = config_frame_id(node, sensor_config.frame_id);
 
-  return [publisher, node_ptr, frame_id, section_readers = std::move(section_readers)]
+  return [publisher, frame_id, section_readers = std::move(section_readers)]
     (const uint8_t* data, uint32_t len, uint64_t timestamp_ns) mutable
   {
     MessageType msg;
@@ -699,7 +698,6 @@ static BlobPublishFn make_nav_sat_fix_factory(
   using sensor_msgs::msg::NavSatStatus;
 
   auto publisher = node.create_publisher<NavSatFix>(topic, 10);
-  auto node_ptr = node.shared_from_this();
   const std::string frame_id = config_frame_id(node, sensor_config.frame_id);
 
   static constexpr uint32_t PAYLOAD_SIZE = 3 * sizeof(double);  // 24 bytes
@@ -711,7 +709,7 @@ static BlobPublishFn make_nav_sat_fix_factory(
   template_msg.position_covariance_type      = NavSatFix::COVARIANCE_TYPE_UNKNOWN;
   template_msg.position_covariance           = {0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0};
 
-  return [publisher, node_ptr, msg = std::move(template_msg)](
+  return [publisher, msg = std::move(template_msg)](
       const uint8_t* data, uint32_t len, uint64_t timestamp_ns) mutable
   {
     if (len < PAYLOAD_SIZE) return;

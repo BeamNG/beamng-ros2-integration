@@ -23,10 +23,9 @@ std::chrono::nanoseconds interval_ns_for_fixed_publish_hz(const std::string& pub
   return std::chrono::duration_cast<std::chrono::nanoseconds>(std::chrono::duration<double>(period_sec));
 }
 
-// Engine shared_memory size per stream role (RGBA or float32 plane is 4 bytes per pixel, annotations RGB is 3).
-size_t camera_shared_memory_byte_size(std::string_view role, uint32_t width, uint32_t height) {
-  const size_t pixels = static_cast<size_t>(width) * height;
-  return (role == "annotation") ? (pixels * 3u) : (pixels * 4u);
+// Engine shared_memory: colour / annotation are RGBA8; depth is float32; all are 4 bytes per pixel.
+size_t camera_shared_memory_byte_size(uint32_t width, uint32_t height) {
+  return static_cast<size_t>(width) * height * 4u;
 }
 
 void copy_rgba8_to_rgb8(const uint8_t* rgba, uint8_t* rgb, size_t pixel_count) {
@@ -110,14 +109,13 @@ void VehicleNode::init_sensor_publishers() {
   }
 
   auto& factory_reg = SensorFactoryRegistry::instance();
+  const std::string bridge_prefix = "/beamng_bridge/" + name_ + "/";
 
   uint32_t scalar_cursor = 0;
   uint32_t string_cursor = 0;
 
   for (const auto& sensor : registry.sensors()) {
     if (sensor.data_mode == DataMode::Blob) {
-      const std::string base = "/beamng_bridge/" + name_ + "/";
-
       if (sensor.msg_file == "Image") {
         blob_slots_.emplace_back();
         const uint32_t slot_idx = static_cast<uint32_t>(blob_slots_.size() - 1);
@@ -150,13 +148,13 @@ void VehicleNode::init_sensor_publishers() {
           };
 
           if (stream_specs.empty()) {
-            add_stream(base + sensor.id, "colour", "rgb8");
+            add_stream(bridge_prefix + sensor.id, "colour", "rgb8");
           } else {
             const bool use_plain_sensor_topic = (stream_specs.size() == 1u);
             for (const auto& spec : stream_specs) {
               const std::string enc = spec.encoding.empty() ? "rgb8" : spec.encoding;
               const std::string topic =
-                  use_plain_sensor_topic ? (base + sensor.id) : (base + sensor.id + "_" + spec.id);
+                  use_plain_sensor_topic ? (bridge_prefix + sensor.id) : (bridge_prefix + sensor.id + "_" + spec.id);
               add_stream(topic, spec.role, enc);
             }
           }
@@ -173,7 +171,7 @@ void VehicleNode::init_sensor_publishers() {
         continue;
       }
 
-      const std::string topic = "/beamng_bridge/" + name_ + "/" + sensor.id;
+      const std::string topic = bridge_prefix + sensor.id;
       const BlobRegisterFn* factory = factory_reg.find_blob(sensor.msg_file);
       if (!factory) {
         std::cerr << "[ROS2 WARN] VehicleNode: no blob factory for msgFile '"
@@ -202,7 +200,7 @@ void VehicleNode::init_sensor_publishers() {
       }
 
     } else {
-      const std::string topic = "/beamng_bridge/" + name_ + "/" + sensor.id;
+      const std::string topic = bridge_prefix + sensor.id;
       const RegisterFn* scalar_factory = factory_reg.find(sensor.msg_file);
 
       if (!scalar_factory) {
@@ -384,14 +382,14 @@ void VehicleNode::set_camera_streams(uint32_t sensor_idx, const BngCameraStreamD
     stream.height = desc.height;
 
     const std::string shared_memory_name = desc.shared_memory_name ? desc.shared_memory_name : "";
-    const size_t region_bytes = camera_shared_memory_byte_size(stream.role, desc.width, desc.height);
+    const size_t region_bytes = camera_shared_memory_byte_size(desc.width, desc.height);
     if (!stream.reader.open(shared_memory_name, region_bytes)) {
       std::cerr << "[ROS2 WARN] set_camera_streams: failed to open shared_memory '" << shared_memory_name
                 << "' (size " << region_bytes << ").\n";
       continue;
     }
     
-    if (stream.role == "colour") {
+    if (stream.role == "colour" || stream.role == "annotation") {
       stream.convert_buf.resize(static_cast<size_t>(desc.width) * desc.height * 3u);
     }
     std::cout << "[ROS2 INFO] camera slot " << sensor_idx << " stream " << desc.stream_index
@@ -489,14 +487,12 @@ void VehicleNode::publish_loop() {
           if (!shared_memory_stream.publish_fn || !shared_memory_stream.reader.is_open()) continue;
           const uint8_t* shared_memory = shared_memory_stream.reader.data();
           const std::string& role = shared_memory_stream.role;
-          if (role == "colour") {
+          if (role == "colour" || role == "annotation") {
             const size_t pixels = static_cast<size_t>(shared_memory_stream.width) * shared_memory_stream.height;
             copy_rgba8_to_rgb8(shared_memory, shared_memory_stream.convert_buf.data(), pixels);
-            shared_memory_stream.publish_fn(shared_memory_stream.convert_buf.data(), static_cast<uint32_t>(pixels * 3u), static_cast<uint64_t>(stamp_ns));
-          } else if (role == "annotation") {
-            const size_t byte_len = static_cast<size_t>(shared_memory_stream.width) * shared_memory_stream.height * 3u;
-            shared_memory_stream.publish_fn(shared_memory, static_cast<uint32_t>(byte_len), static_cast<uint64_t>(stamp_ns));
-          } else if (role == "depth" || role == "instance") {
+            shared_memory_stream.publish_fn(shared_memory_stream.convert_buf.data(), static_cast<uint32_t>(pixels * 3u),
+                                            static_cast<uint64_t>(stamp_ns));
+          } else if (role == "depth") {
             const size_t byte_len = static_cast<size_t>(shared_memory_stream.width) * shared_memory_stream.height * 4u;
             shared_memory_stream.publish_fn(shared_memory, static_cast<uint32_t>(byte_len), static_cast<uint64_t>(stamp_ns));
           }
@@ -637,10 +633,12 @@ BNG_ROS2_API void* bngros2_get_vehicle_handle(uint32_t id) {
 }
 
 BNG_ROS2_API void bngros2_handle_broadcast_tf(void* handle, double pos[3], double rot[4]) {
+  if (!handle) return;
   static_cast<bng_ros2::VehicleNode*>(handle)->broadcast_tf(pos, rot);
 }
 
 BNG_ROS2_API void bngros2_handle_push_frame(void* handle, const double* values, uint32_t count) {
+  if (!handle) return;
   static_cast<bng_ros2::VehicleNode*>(handle)->push_frame(values, count);
 }
 
@@ -663,6 +661,7 @@ BNG_ROS2_API void bngros2_handle_set_sensor_field_string(void* handle,
                                                           const char* sensor_id,
                                                           const char* field_name,
                                                           const char* value) {
+  if (!handle || !sensor_id || !field_name) return;
   static_cast<bng_ros2::VehicleNode*>(handle)->set_sensor_field_string(
       sensor_id, field_name, value ? value : "");
 }

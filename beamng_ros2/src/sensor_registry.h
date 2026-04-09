@@ -21,7 +21,7 @@ enum class DataMode {
 struct ImageStreamSpec {
   std::string id;        // topic suffix: /vehicle_X/sensorId_<id>
   std::string encoding;  // sensor_msgs/Image encoding: rgb8, 32FC1, 32SC1, ...
-  std::string role;      // colour | depth | annotation | instance — conversion in VehicleNode
+  std::string role;      // colour | depth | annotation — conversion in VehicleNode
 };
 
 struct BlobLayout {
