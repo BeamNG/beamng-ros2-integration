@@ -363,6 +363,8 @@ void VehicleNode::push_blobs_batch(const BngBlobDesc* blob_descriptions, uint32_
   // Wake the publish thread once after all slots are committed.
   blob_dirty_.store(true, std::memory_order_release);
   blob_cv_.notify_one();
+  // If no scalar topics are publishing, wait_for_data() may be sleeping: wake it so blobs publish promptly.
+  scalar_buf_.notify_waiters();
 }
 
 void VehicleNode::set_camera_streams(uint32_t sensor_idx, const BngCameraStreamDesc* streams, uint32_t count) {

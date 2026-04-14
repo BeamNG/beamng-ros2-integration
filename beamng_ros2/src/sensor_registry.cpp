@@ -14,14 +14,13 @@ SensorRegistry& SensorRegistry::instance() {
 static uint32_t compute_max_bytes(const nlohmann::json& layout) {
   if (!layout.is_object()) return 0;
 
-  // maxPoints-driven layouts first so Radar/LiDAR are not mis-sized as images when
+  // maxPoints-driven layouts first so LiDAR is not mis-sized as images when
   if (layout.contains("maxPoints")) {
     uint32_t stride = layout.value("pointStride", uint32_t{0});
 
     if (stride == 0) {
       const std::string format = layout.value("format", "");
-      if (format == "radar_returns_f32") stride = 28u;
-      else if (format == "xyz_float32") stride = 12u;
+      if (format == "xyz_float32") stride = 12u;
     }
 
     if (stride > 0) {

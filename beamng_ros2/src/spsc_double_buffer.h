@@ -78,6 +78,12 @@ struct SpscDoubleBuffer {
     return (state_.load(std::memory_order_acquire) & 2u) != 0;
   }
 
+  // Wake wait_for_data() without marking dirty (e.g. blob batch arrived while scalar frame idle).
+  void notify_waiters() {
+    std::lock_guard<std::mutex> lk(condition_variable_mutex_);
+    condition_variable_.notify_one();
+  }
+
   bool is_dirty() const {
     return (state_.load(std::memory_order_acquire) & 2u) != 0;
   }

@@ -5,7 +5,6 @@
 #include <beamng_msgs/msg/state_sensor.hpp>
 #include <beamng_msgs/msg/damage_sensor.hpp>
 #include <beamng_msgs/msg/time_sensor.hpp>
-#include <beamng_msgs/msg/radar_scan.hpp>
 #include <beamng_msgs/msg/ideal_radar_sensor.hpp>
 #include <beamng_msgs/msg/powertrain_sensor.hpp>
 #include <beamng_msgs/msg/roads_sensor.hpp>
@@ -446,59 +445,18 @@ static BlobPublishFn make_pointcloud2_factory(
     msg.header.stamp = rclcpp::Time(static_cast<int64_t>(timestamp_ns));
     msg.width        = (stride > 0) ? (len / stride) : 0;
     msg.row_step     = len;
-    msg.data.assign(data, data + len);
-    publisher->publish(msg);
-  };
-}
-
-// Wire format from Research.Radar.getLastReadingsBuffer:
-// flat array of returns, each return is 7 consecutive float32 values:
-//   [0] range                (float32)
-//   [1] doppler_velocity     (float32)
-//   [2] azimuth              (float32)
-//   [3] elevation            (float32)
-//   [4] radar_cross_section  (float32)
-//   [5] signal_to_noise_ratio(float32)
-//   [6] facing_factor        (float32)
-// Total: 28 bytes per return. Count = len / 28.
-static BlobPublishFn make_radar_scan_factory(
-    rclcpp::Node& node,
-    const std::string& topic,
-    const SensorConfig& sensor_config)
-{
-  using beamng_msgs::msg::RadarScan;
-  using beamng_msgs::msg::RadarReturn;
-
-  auto publisher = node.create_publisher<RadarScan>(topic, 10);
-  const std::string frame_id = config_frame_id(node, sensor_config.frame_id);
-
-  static constexpr uint32_t RETURN_STRIDE = 7 * sizeof(float);  // 28 bytes
-  static_assert(sizeof(RadarReturn) == RETURN_STRIDE, "RadarReturn must match wire layout (7xfloat32, no padding) for bulk memcpy");
-  static_assert(std::is_trivially_copyable_v<RadarReturn>, "RadarReturn must be memcpy-safe");
-
-  // Pre-size the sequence once, publish path only adjusts length and copies wire bytes.
-  const uint32_t max_returns = sensor_config.blob_layout.max_bytes > 0
-      ? sensor_config.blob_layout.max_bytes / RETURN_STRIDE : 1000u;
-
-  RadarScan template_msg;
-  template_msg.header.frame_id = frame_id;
-  template_msg.returns.reserve(max_returns);
-
-  return [publisher, msg = std::move(template_msg), max_returns](const uint8_t* data, uint32_t len, uint64_t timestamp_ns) mutable
-  {
-    const uint32_t count = len / RETURN_STRIDE;
-    if (count == 0) {
-      return;
+    auto& blob = msg.data;
+    if (static_cast<uint32_t>(blob.size()) != len) {
+      blob.resize(len);
     }
-    const uint32_t use_count = (count > max_returns) ? max_returns : count;
-
-    msg.header.stamp = rclcpp::Time(static_cast<int64_t>(timestamp_ns));
-    msg.returns.resize(use_count);
-    std::memcpy(msg.returns.data(), data, static_cast<size_t>(use_count) * RETURN_STRIDE);
-
+    if (len > 0) {
+      std::memcpy(blob.data(), data, len);
+    }
     publisher->publish(msg);
   };
 }
+
+// BeamNG GPU Radar publishes as sensor_msgs/PointCloud2 with the same xyz_float32 layout as LiDAR (make_pointcloud2_factory).
 
 // Wire format for AdvancedIMU (virtual blob, vehicle-side encoder):
 // Fixed 80-byte payload (10 × float64):
@@ -898,7 +856,6 @@ void register_all_sensor_factories() {
   reg.register_blob_factory("DamageSensor",    make_dynamic_array_sensor_factory);
   reg.register_blob_factory("Imu",             make_imu_factory);
   reg.register_blob_factory("PointCloud2",     make_pointcloud2_factory);
-  reg.register_blob_factory("RadarScan",       make_radar_scan_factory);
   reg.register_blob_factory("NavSatFix",       make_nav_sat_fix_factory);
   reg.register_blob_factory("RoadsSensor",       make_roads_sensor_factory);
   reg.register_blob_factory("PowertrainSensor",  make_powertrain_sensor_factory);
