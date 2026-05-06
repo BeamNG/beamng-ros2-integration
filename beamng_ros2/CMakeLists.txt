@@ -36,15 +36,19 @@ set(BEAMNG_LIBRARY ros2_beamng)
 
 add_library(${BEAMNG_LIBRARY} SHARED
   src/init.cpp
-  src/beamng_node.cpp
+  src/api.cpp
   src/vehicle_node.cpp
-  src/sensor_registry.cpp
-  src/sensor_factories.cpp
-  src/shared_memory_reader.cpp
+  src/publishers/scalar_publishers.cpp
+  src/publishers/blob_publishers.cpp
+  src/publishers/gpu_publishers.cpp
+  src/utils/config.cpp
+  src/memory/shared_memory_reader.cpp
 )
 target_include_directories(${BEAMNG_LIBRARY} PUBLIC
   $<BUILD_INTERFACE:${CMAKE_CURRENT_SOURCE_DIR}/include>
   $<INSTALL_INTERFACE:include>)
+target_include_directories(${BEAMNG_LIBRARY} PRIVATE
+  "${CMAKE_CURRENT_SOURCE_DIR}/src")
 target_compile_features(${BEAMNG_LIBRARY} PUBLIC c_std_99 cxx_std_17)  # Require C99 and C++17
 target_compile_definitions(${BEAMNG_LIBRARY} PUBLIC
   BNG_ROS2_COMPILING

@@ -175,3 +175,6 @@ compile.bat
 init_env_wsl.sh
 init_env.ps1
 config/cyclonedds.xml
+
+# ROS visualizer
+image_topic_viewer/

@@ -1,5 +1,4 @@
 #include "rclcpp/rclcpp.hpp"
-#include "sensor_factories.h"
 
 static void ros2_init() {
   try {
@@ -7,7 +6,6 @@ static void ros2_init() {
   } catch (const rclcpp::ContextAlreadyInitialized&) {
     // Silently ignore: another DLL or the host app already called rclcpp::init.
   }
-  bng_ros2::register_all_sensor_factories();
 }
 
 #ifdef __linux__
