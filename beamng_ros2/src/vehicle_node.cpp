@@ -41,6 +41,18 @@ VehicleNode::VehicleNode(const std::string& name)
     : Node(name), name_(name) {
     tf_broadcaster_ = std::make_unique<tf2_ros::TransformBroadcaster>(*this);
     marker_pub_ = create_publisher<visualization_msgs::msg::MarkerArray>("~/marker", 10);
+    control_sub_ = create_subscription<beamng_msgs::msg::VehicleControl>(
+        "~/control", 10,
+        [this](const beamng_msgs::msg::VehicleControl::SharedPtr msg) {
+            ControlMessage control_message;
+            control_message.steering = msg->steering;
+            control_message.throttle = msg->throttle;
+            control_message.brake = msg->brake;
+            control_message.parkingbrake = msg->parkingbrake;
+            control_message.clutch = msg->clutch;
+            control_message.gear = msg->gear;
+            control_buffer_.commit(control_message);
+        });
 }
 
 VehicleNode::~VehicleNode() {
@@ -228,6 +240,25 @@ void VehicleNode::set_vehicle_data(const double scale[3], const double color[4],
     marker_state_.dirty.store(true, std::memory_order_release);
 }
 
+uint64_t VehicleNode::get_control_version() const {
+    return control_buffer_.sequence();
+}
+
+int VehicleNode::get_control_frame(BngControlView* out) {
+    if (!out) return -1;
+    ControlMessage snap;
+    uint64_t ver = 0;
+    if (control_buffer_.read_snapshot(&snap, &ver) != 0) return -1;
+    out->version = ver;
+    out->steering = snap.steering;
+    out->throttle = snap.throttle;
+    out->brake = snap.brake;
+    out->parkingbrake = snap.parkingbrake;
+    out->clutch = snap.clutch;
+    out->gear = snap.gear;
+    return 0;
+}
+
 void VehicleNode::publish_loop() {
     using namespace std::chrono;
     constexpr auto k_loop_period = microseconds(500);
@@ -246,6 +277,8 @@ void VehicleNode::publish_loop() {
     while (running_.load(std::memory_order_acquire)) {
         const auto tick = steady_clock::now();
         if (!running_.load(std::memory_order_acquire)) break;
+
+        rclcpp::spin_some(this->get_node_base_interface());
 
         const auto stamp_now = get_clock()->now();
         const auto steady_now = tick;

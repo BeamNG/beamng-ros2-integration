@@ -11,6 +11,7 @@
 #include <unordered_map>
 #include <vector>
 
+#include <beamng_msgs/msg/vehicle_control.hpp>
 #include <rclcpp/rclcpp.hpp>
 #include <tf2_ros/transform_broadcaster.h>
 #include <visualization_msgs/msg/marker_array.hpp>
@@ -81,6 +82,9 @@ class VehicleNode : public rclcpp::Node {
     void broadcast_tf(const double pos[3], const double rot[4]);
     void set_vehicle_data(const double scale[3], const double color[4], const double arrow_color[4]);
 
+    uint64_t get_control_version() const;
+    int get_control_frame(BngControlView* out);
+
   private:
     void publish_loop();
 
@@ -114,6 +118,9 @@ class VehicleNode : public rclcpp::Node {
         double color[4]{1, 1, 1, 1};
         double arrow_color[4]{1, 0, 0, 1};
     } marker_state_;
+
+    rclcpp::Subscription<beamng_msgs::msg::VehicleControl>::SharedPtr control_sub_;
+    ControlBuffer control_buffer_;
 
     std::thread publish_thread_;
     std::atomic<bool> running_{false};

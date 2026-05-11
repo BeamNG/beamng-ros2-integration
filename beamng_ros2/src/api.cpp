@@ -91,4 +91,14 @@ BNG_ROS2_API void bngros2_handle_set_vehicle_data(void* handle, const double sca
     static_cast<bng_ros2::VehicleNode*>(handle)->set_vehicle_data(scale, color, arrow_color);
 }
 
+BNG_ROS2_API uint64_t bngros2_handle_get_control_version(void* handle) {
+    if (!handle) return 0;
+    return static_cast<bng_ros2::VehicleNode*>(handle)->get_control_version();
+}
+
+BNG_ROS2_API int bngros2_handle_get_control_frame(void* handle, BngControlView* out) {
+    if (!handle) return -1;
+    return static_cast<bng_ros2::VehicleNode*>(handle)->get_control_frame(out);
+}
+
 }  // extern "C"
