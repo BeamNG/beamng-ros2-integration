@@ -53,18 +53,18 @@ target_compile_features(${BEAMNG_LIBRARY} PUBLIC c_std_99 cxx_std_17)  # Require
 target_compile_definitions(${BEAMNG_LIBRARY} PUBLIC
   BNG_ROS2_COMPILING
 )
-ament_target_dependencies(${BEAMNG_LIBRARY}
-  rclcpp
-  std_msgs
-  geometry_msgs
-  visualization_msgs
-  tf2
-  tf2_ros
-  tf2_geometry_msgs
-  beamng_msgs
-  sensor_msgs
-  rosidl_typesupport_introspection_cpp
-  rosidl_typesupport_cpp
+target_link_libraries(${BEAMNG_LIBRARY} PUBLIC
+  rclcpp::rclcpp
+  ${std_msgs_TARGETS}
+  ${geometry_msgs_TARGETS}
+  ${visualization_msgs_TARGETS}
+  tf2::tf2
+  tf2_ros::tf2_ros
+  tf2_geometry_msgs::tf2_geometry_msgs
+  ${beamng_msgs_TARGETS}
+  ${sensor_msgs_TARGETS}
+  rosidl_typesupport_cpp::rosidl_typesupport_cpp
+  rosidl_typesupport_introspection_cpp::rosidl_typesupport_introspection_cpp
 )
 
 install(TARGETS ${BEAMNG_LIBRARY}
