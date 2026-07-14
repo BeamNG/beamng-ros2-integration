@@ -1,0 +1,45 @@
+stages:
+  - build
+
+.ros_build_template:
+  stage: build
+  before_script:
+    - apt update && apt install locales -y
+    - locale-gen en_US en_US.UTF-8
+    - update-locale LC_ALL=en_US.UTF-8 LANG=en_US.UTF-8
+    - export LANG=en_US.UTF-8
+    - apt install software-properties-common -y
+    - add-apt-repository universe -y
+    - apt update && apt install curl -y
+    - export ROS_APT_SOURCE_VERSION=$(curl -s https://api.github.com/repos/ros-infrastructure/ros-apt-source/releases/latest | grep -F "tag_name" | awk -F'"' '{print $4}')
+    - curl -L -o /tmp/ros2-apt-source.deb "https://github.com/ros-infrastructure/ros-apt-source/releases/download/${ROS_APT_SOURCE_VERSION}/ros2-apt-source_${ROS_APT_SOURCE_VERSION}.$(. /etc/os-release && echo ${UBUNTU_CODENAME:-${VERSION_CODENAME}})_all.deb"
+    - dpkg -i /tmp/ros2-apt-source.deb
+    - apt update
+    - apt upgrade -y
+    - apt install -y ros-${ROS_DISTRO}-ros-base python3-colcon-common-extensions
+  script:
+    - /bin/bash -c "source /opt/ros/${ROS_DISTRO}/setup.bash && cd '$CI_PROJECT_DIR' && colcon build --merge-install --packages-select beamng_msgs beamng_ros2"
+  artifacts:
+    name: "${CI_JOB_NAME}"
+    paths:
+      - install/
+      - build/**/*.so
+    expire_in: 1 week
+
+build_humble_ubuntu2204:
+  extends: .ros_build_template
+  image: ubuntu:22.04
+  variables:
+    ROS_DISTRO: humble
+
+build_jazzy_ubuntu2404:
+  extends: .ros_build_template
+  image: ubuntu:24.04
+  variables:
+    ROS_DISTRO: jazzy
+
+build_lyrical_ubuntu2604:
+  extends: .ros_build_template
+  image: ubuntu:26.04
+  variables:
+    ROS_DISTRO: lyrical
