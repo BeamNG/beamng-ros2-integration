@@ -16,7 +16,7 @@ stages:
     name: "${CI_JOB_NAME}"
     paths:
       - install/
-      - build/
+      - build/**/*.so
     expire_in: 1 week
 
 build_humble_ubuntu2204:
