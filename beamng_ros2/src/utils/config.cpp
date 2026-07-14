@@ -56,7 +56,10 @@ bool parse_config_from_json(const std::string& json, Config& out) {
                 }
                 
                 entry.blob_layout.publish_mode = blob_layout.value("publishMode", blob_layout.value("publish_mode", std::string{}));
-                
+                entry.blob_layout.range_min = blob_layout.value("rangeMin", 0.0);
+                entry.blob_layout.range_max = blob_layout.value("rangeMax", 0.0);
+                entry.blob_layout.field_of_view = blob_layout.value("fieldOfView", 0.0);
+
                 if (blob_layout.contains("streams") && blob_layout["streams"].is_array()) {
                     for (const auto& stream : blob_layout["streams"]) {
                         CameraStreamSpec spec;

@@ -1,7 +1,5 @@
 #include "publishers/gpu_publishers.h"
 
-#include "utils/binary_read_helpers.h"
-
 #include <sensor_msgs/msg/image.hpp>
 #include <sensor_msgs/msg/point_cloud2.hpp>
 #include <sensor_msgs/msg/point_field.hpp>
@@ -14,8 +12,6 @@
 namespace bng_ros2 {
 
 namespace {
-
-using br::read_f32;
 
 std::string frame_or_node(rclcpp::Node& node, const std::string& frame) {
     return frame.empty() ? std::string(node.get_name()) : frame;
@@ -83,24 +79,24 @@ BlobPublishFn make_pointcloud2(rclcpp::Node& node, const std::string& topic, con
     };
 }
 
+/// Ultrasonic shmem holds a single raw f32 (the measured distance), range limits/FOV are static from config.
 BlobPublishFn make_range(rclcpp::Node& node, const std::string& topic, const SensorEntry& sensor) {
     using sensor_msgs::msg::Range;
     auto pub = node.create_publisher<Range>(topic, 10);
     Range range_template;
     range_template.header.frame_id = frame_or_node(node, sensor.frame_id);
     range_template.radiation_type = Range::ULTRASOUND;
+    range_template.field_of_view = static_cast<float>(sensor.blob_layout.field_of_view);
+    range_template.min_range = static_cast<float>(sensor.blob_layout.range_min);
+    range_template.max_range = static_cast<float>(sensor.blob_layout.range_max);
 
     return [pub, msg = std::move(range_template)](const uint8_t* data, uint32_t len, const rclcpp::Time& stamp) mutable {
-        constexpr uint32_t k_payload = 1 + 4 * sizeof(float);
-        if (len < k_payload) return;
-        uint32_t pos = 0;
+        if (len < sizeof(float)) return;
+        float distance;
+        std::memcpy(&distance, data, sizeof(float));
         msg.header.stamp = stamp;
-        msg.radiation_type = data[pos]; pos += 1;
-        msg.field_of_view = read_f32(data, &pos);
-        msg.min_range = read_f32(data, &pos);
-        msg.max_range = read_f32(data, &pos);
-        msg.range = read_f32(data, &pos);
-        
+        msg.range = distance;
+
         pub->publish(msg);
     };
 }
@@ -162,7 +158,7 @@ void build_gpu_streams(rclcpp::Node& node, GpuSensor& gpu, const SensorEntry& se
 
     else if (sensor.layout == LayoutId::GpuUltrasonic) {
         GpuStream stream;
-        stream.byte_size = 256u;
+        stream.byte_size = sizeof(float);
         stream.publish_fn = make_range(node, topic, sensor);
         gpu.streams.push_back(std::move(stream));
         return;

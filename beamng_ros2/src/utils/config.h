@@ -24,6 +24,9 @@ struct BlobLayoutSpec {
     double inv_publish_rate_hz{0.0};
     std::string publish_mode;
     std::vector<CameraStreamSpec> camera_streams;
+    double range_min{0.0};
+    double range_max{0.0};
+    double field_of_view{0.0};
 };
 
 struct FieldSpec {
