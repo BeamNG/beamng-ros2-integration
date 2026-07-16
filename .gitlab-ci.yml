@@ -2,6 +2,10 @@ stages:
   - build
   - publish
 
+default:
+  tags:
+    - docker
+
 variables:
   PACKAGE_NAME: "beamng-ros2"
 
