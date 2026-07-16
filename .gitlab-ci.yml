@@ -19,11 +19,13 @@ variables:
     - export LANG=en_US.UTF-8
     - export LC_ALL=en_US.UTF-8
   script:
-    - /bin/bash -c "source /opt/ros/${ROS_DISTRO}/setup.bash && cd '$CI_PROJECT_DIR' && colcon build --merge-install --build-base build_${ROS_DISTRO} --install-base install_${ROS_DISTRO} --packages-select beamng_msgs beamng_ros2"
+    - /bin/bash -c "source /opt/ros/${ROS_DISTRO}/setup.bash && cd '$CI_PROJECT_DIR' && colcon build --merge-install --packages-select beamng_msgs beamng_ros2"
     - cd "$CI_PROJECT_DIR"
+    - cp build/beamng_ros2/libros2_beamng.so .
+    - rm -rf build
     - mkdir -p out/${TARGET_OS}-${ROS_DISTRO}
     - export DEV_ZIP="${TARGET_OS}-${ROS_DISTRO}-${CI_COMMIT_SHORT_SHA}.zip"
-    - zip -r "out/${TARGET_OS}-${ROS_DISTRO}/${DEV_ZIP}" "install_${ROS_DISTRO}" "build_${ROS_DISTRO}"
+    - zip -r "out/${TARGET_OS}-${ROS_DISTRO}/${DEV_ZIP}" install libros2_beamng.so
     - echo "Created out/${TARGET_OS}-${ROS_DISTRO}/${DEV_ZIP}"
   artifacts:
     name: "${CI_JOB_NAME}"
@@ -54,7 +56,7 @@ build_lyrical_ubuntu2604:
 
 publish_release_package:
   stage: publish
-  image: alpine:latest
+  image: ubuntu:latest
   needs:
     - job: build_humble_ubuntu2204
       artifacts: true
