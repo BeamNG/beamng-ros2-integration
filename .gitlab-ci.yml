@@ -13,14 +13,7 @@ variables:
   stage: build
   before_script:
     - apt-get update
-    - apt-get install -y --no-install-recommends \
-        locales \
-        build-essential \
-        cmake \
-        git \
-        curl \
-        zip \
-        python3-colcon-common-extensions
+    - apt-get install -y --no-install-recommends locales build-essential cmake git curl zip python3-colcon-common-extensions
     - locale-gen en_US en_US.UTF-8
     - update-locale LC_ALL=en_US.UTF-8 LANG=en_US.UTF-8
     - export LANG=en_US.UTF-8
