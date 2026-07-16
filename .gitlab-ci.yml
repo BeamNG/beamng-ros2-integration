@@ -65,7 +65,7 @@ publish_release_package:
     - job: build_lyrical_ubuntu2604
       artifacts: true
   before_script:
-    - apk add --no-cache curl bash zip unzip coreutils findutils
+    - apt-get update && apt-get install -y curl bash zip unzip coreutils findutils
   script:
     - export RELEASE_VERSION="v$(date +%m%y)"
     - mkdir -p release
