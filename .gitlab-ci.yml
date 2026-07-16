@@ -1,0 +1,92 @@
+stages:
+  - build
+  - publish
+
+variables:
+  PACKAGE_NAME: "beamng-ros2"
+
+.ros_build_template:
+  stage: build
+  before_script:
+    - apt-get update
+    - apt-get install -y --no-install-recommends \
+        locales \
+        build-essential \
+        cmake \
+        git \
+        curl \
+        zip \
+        python3-colcon-common-extensions
+    - locale-gen en_US en_US.UTF-8
+    - update-locale LC_ALL=en_US.UTF-8 LANG=en_US.UTF-8
+    - export LANG=en_US.UTF-8
+    - export LC_ALL=en_US.UTF-8
+  script:
+    - /bin/bash -c "source /opt/ros/${ROS_DISTRO}/setup.bash && cd '$CI_PROJECT_DIR' && colcon build --merge-install --build-base build_${ROS_DISTRO} --install-base install_${ROS_DISTRO} --packages-select beamng_msgs beamng_ros2"
+    - cd "$CI_PROJECT_DIR"
+    - mkdir -p out/${TARGET_OS}-${ROS_DISTRO}
+    - export DEV_ZIP="${TARGET_OS}-${ROS_DISTRO}-${CI_COMMIT_SHORT_SHA}.zip"
+    - zip -r "out/${TARGET_OS}-${ROS_DISTRO}/${DEV_ZIP}" "install_${ROS_DISTRO}" "build_${ROS_DISTRO}"
+    - echo "Created out/${TARGET_OS}-${ROS_DISTRO}/${DEV_ZIP}"
+  artifacts:
+    name: "${CI_JOB_NAME}"
+    paths:
+      - out/
+    expire_in: 1 week
+
+build_humble_ubuntu2204:
+  extends: .ros_build_template
+  image: ros:humble-ros-base-jammy
+  variables:
+    ROS_DISTRO: humble
+    TARGET_OS: ubuntu2204
+
+build_jazzy_ubuntu2404:
+  extends: .ros_build_template
+  image: ros:jazzy-ros-base-noble
+  variables:
+    ROS_DISTRO: jazzy
+    TARGET_OS: ubuntu2404
+
+build_lyrical_ubuntu2604:
+  extends: .ros_build_template
+  image: ros:lyrical-ros-base-resolute
+  variables:
+    ROS_DISTRO: lyrical
+    TARGET_OS: ubuntu2604
+
+publish_release_package:
+  stage: publish
+  image: alpine:latest
+  needs:
+    - job: build_humble_ubuntu2204
+      artifacts: true
+    - job: build_jazzy_ubuntu2404
+      artifacts: true
+    - job: build_lyrical_ubuntu2604
+      artifacts: true
+  before_script:
+    - apk add --no-cache curl bash zip unzip coreutils findutils
+  script:
+    - export RELEASE_VERSION="v$(date +%m%y)"
+    - mkdir -p release
+    - find . -type f -path "*/out/*.zip" -exec cp {} release/ \;
+    - |
+      for f in release/*.zip; do
+        [ -f "$f" ] || continue
+        base="$(basename "$f")"
+        renamed="$(echo "$base" | sed -E "s/-[0-9a-fA-F]+\.zip$/-${RELEASE_VERSION}.zip/")"
+        mv "$f" "release/$renamed"
+      done
+    - ls -la release
+    - |
+      for f in release/*.zip; do
+        [ -f "$f" ] || continue
+        filename="$(basename "$f")"
+        curl --fail --header "JOB-TOKEN: ${CI_JOB_TOKEN}" \
+            --upload-file "$f" \
+            "${CI_API_V4_URL}/projects/${CI_PROJECT_ID}/packages/generic/${PACKAGE_NAME}/${RELEASE_VERSION}/${filename}"
+      done
+  when: manual
+  rules:
+    - if: $CI_COMMIT_BRANCH
