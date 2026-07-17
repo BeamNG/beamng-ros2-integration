@@ -22,6 +22,12 @@ variables:
     - /bin/bash -c "source /opt/ros/${ROS_DISTRO}/setup.bash && cd '$CI_PROJECT_DIR' && colcon build --merge-install --packages-select beamng_msgs beamng_ros2"
     - cd "$CI_PROJECT_DIR"
     - cp build/beamng_ros2/libros2_beamng.so .
+    - rm -f install/setup.*
+    - |
+      for f in install/local_setup.*; do
+        [ -f "$f" ] || continue
+        sed -i -E 's#(_colcon_python_executable=)"[^"]*python[0-9]*(\.exe)?"#\1"python3"#' "$f"
+      done
     - rm -rf build
     - mkdir -p out/${TARGET_OS}-${ROS_DISTRO}
     - export DEV_ZIP="${TARGET_OS}-${ROS_DISTRO}-${CI_COMMIT_SHORT_SHA}.zip"
