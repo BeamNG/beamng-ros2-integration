@@ -2,9 +2,9 @@
 
 ## About
 
-This repository contains packages to support the interoperability between [BeamNG.tech](https://beamng.tech/) and [ROS2](https://www.ros.org/).
+This repository contains packages to support the interoperability between [BeamNG.tech][1] and [ROS2][2].
 BeamNG.tech is a driving simulation platform, suitable for commercial and academic use.
-Inquiries for academic use can be made through our [registration form](https://register.beamng.tech/).
+Inquiries for academic use can be made through our [registration form][3].
 For inquiries regarding commercial use, contact us at <licensing@beamng.gmbh>.
 
 ## Table of Contents
@@ -14,121 +14,101 @@ For inquiries regarding commercial use, contact us at <licensing@beamng.gmbh>.
   - [Table of Contents](#table-of-contents)
   - [Documentation](#documentation)
   - [Features](#features)
-  - [Prerequisites](#prerequisites)
-    - [Steps](#steps)
-    - [Optional Dependencies](#optional-dependencies)
   - [Getting Started](#getting-started)
-    - [Steps](#steps-1)
+    - [Prerequisites](#prerequisites)
+    - [Initial Setup](#initial-setup)
+    - [Running BeamNG.tech with ROS2](#running-beamngtech-with-ros2)
+  - [Usage](#usage)
   - [Compatibility](#compatibility)
   - [Troubleshooting](#troubleshooting)
     - [Known Issues](#known-issues)
   - [Contributions](#contributions)
 
-<a name="docs"></a>
-
-## Documentation
-The documentation is generated using `rosdoc2` and can be found at [https://beamngpy.readthedocs.io/en/latest/_static/beamng_ros2](https://beamngpy.readthedocs.io/en/latest/_static/beamng_ros2).
-
-The [list of ROS2 messages, services and actions](https://beamngpy.readthedocs.io/en/latest/_static/beamng_msgs/) is also available online.
-
-## Features
-
-The BeamNG ROS2 integration includes support for the **remote** control of the simulation platform, attaching sensors to vehicles (using scenario files), and getting the sensor data from vehicles.
-
-<a name="prereqs"></a>
-
-## Prerequisites
-
-For using the BeamNG ROS2 integration, a BeamNG.tech build and a Python environment with [BeamNGpy][1] installed are required. BeamNGpy has to have compatible version with the BeamNG.tech installation.
-
-For sensor shared memory support, BeamNG.tech and ROS have to be running on the **same machine** and the **same operating system** (Windows Subsystem for Linux will not work with shared memory). Shared memory on Linux is **not working** in the current BeamNG.tech release and the support will come in the next major update.
-
-The BeamNG ROS2 integration is tested with the following ROS2 distributions: [Foxy Fitzroy](https://docs.ros.org/en/foxy) and [Humble Hawksbill](https://docs.ros.org/en/humble/index.html).
-
-### Steps
-1. Setup your ROS2 Humble/Foxy workspace.
-2. Clone this repository into your ROS2 workspace.
-3. Use [rosdep](https://docs.ros.org/en/humble/Tutorials/Intermediate/Rosdep.html#rosdep-operation) to install the dependencies for the package.
-4. Install `beamngpy` using pip or conda in the Python environment you use to run the ROS2 nodes.
-5. To run the bridge, run `ros2 run beamng_ros2 beamng_bridge`.
-
-### Optional Dependencies
-If available, BeamNG-ROS2 will use the `python-rapidjson` library to support JSON files which do not strictly follow the standard:
-
-  ```bash
-  pip install python-rapidjson
-  ```
-
-<a name="getstart"></a>
-
 ## Getting Started
 
-To use this project, a basic knowledge of the BeamNG.tech simulator and the BeamNGpy is neccessary. We recommend to familiarize yourself first with [BeamNGpy][1] to get a basic understanding of the platform before using the BeamNG ROS2 Integration.
+### Prerequisites
 
-### Steps
-1. After setting up BeamNG.tech and BeamNGpy with a Python environment, the simulation needs to be listening on the BeamNGpy socket. To do that, you can run the executable with the following arguments:
+For using the BeamNG ROS2 integration, a BeamNG.tech build and a ROS2 environment are required.
 
-  Command prompt (`cmd.exe`):
-  ```bat
-  Bin64\BeamNG.tech.x64.exe -console -nosteam -tcom-listen-ip <LISTEN_IP> -lua extensions.tech_techCore.openServer(25252)
-  ```
+BeamNG.tech and ROS have to be running on the **same machine** and the **same operating system** (Windows Subsystem for Linux is heavily discouraged due to performance limitations).
 
-  PowerShell:
-  ```posh
-  Bin64\BeamNG.tech.x64.exe -console -nosteam -tcom-listen-ip <LISTEN_IP> -lua "extensions.tech_techCore.openServer(25252)"
-  ```
+### Initial Setup
+1. Download the latest Windows build of the BeamNG ROS2 integration from the [releases][4] page.
+2. Extract the zip file to a directory of your choice.
+3. If you are on Windows, copy the `.dll` file to the `Bin64` directory of your BeamNG.tech installation. If you are on Linux, copy the `.so` file to the `BinLinux` directory of your BeamNG.tech installation.
 
-  Linux Terminal:
-  ```bash
-  BinLinux/BeamNG.tech.x64 -nosteam -tcom-listen-ip <LISTEN_IP> -lua "extensions.tech_techCore.openServer(25252)"
-  ```
+### Running BeamNG.tech with ROS2
 
-  `<LISTEN_IP>` will be `127.0.0.1` in the case of running BeamNG.tech on the same machine and operating system as the ROS2 interface. If you are running ROS2 using WSL or want to connect to a remote machine, you need to set the listen IP to the one of the corresponding network interface.
+In order to use use BeamNG with ROS2, you need to source the ROS2 environment and our ROS2 extension :
+- Source your ROS2 environment as explained in the documentation of your ROS2 distribution.
+- Source our ROS2 extension by running `install\local_setup.*`. Depending on your operating system and terminal, the following options are available :
+  - Windows : `install\local_setup.ps1`, `install\local_setup.bat`
+  - Linux : `install\local_setup.sh`, `install\local_setup.bash`, `install\local_setup.zsh`, `install\local_setup.ps1`
+- Start BeamNG.tech with ROS2 by running `Bin64\BeamNG.drive.x64.exe -disable-sandbox`.
+*Note : without the `-disable-sandbox` flag, the BeamNG ROS2 integration will not work correctly.*
 
-2. The ROS2 packages from this repository need to be added and built in your colcon workspace. See the [ROS2 tutorials](https://docs.ros.org/en/humble/Tutorials.html) for more information on how to set up a colcon workspace.
-   If you use ROS2 on Windows (without WSL), the `rosdep` command does not work, you will have to skip installing dependencies or install them manually. The integration should still work on that configuration.
+## Usage
 
-  ```bash
-  source /opt/ros/humble/setup.bash
-  cd ~/ros2_ws/src
-  git clone https://github.com/BeamNG/beamng-ros2-integration.git
-  cd ~/ros2_ws
-  rosdep install -i --from-path src --rosdistro humble -y
-  colcon build # or colcon build --symlink-install
-  ```
+### Enable the ROS2 Editor
+Once you have started BeamNG.tech with ROS2, you can use it via the World Editor interface :
+- Load a map and a vehicle
+- Open the World Editor (default : `F11`)
+- Open the Set Editor :
+![World Editor Interface](media/World_Editor_Menu.png)
+- Go to Edit Sets
+- Add the ROS2 Editor to the selected set:
+![ROS2 Editor Selected](media/ROS2_Set_Selected.png)
 
-1. A node connecting ROS2 to the simulation can be started using the `ros2 run` command:
+### Use the ROS2 Editor
+Once the ROS2 Editor is enabled, you can find it with the following icon :
+![ROS2 Editor Icon](media/ROS2_Editor_Icon.png)
 
-  ```bash
-  ros2 run beamng_ros2 beamng_bridge
-  ```
+On the ROS2 Editor window that opens, you have 5 sections :
 
-  It needs to be configured to contain the correct IP address of the machine hosting the simulation.
+1. On the very top, you can choose which `.dll` or `.so` file to use, this is useful if you want to use different versions of ROS2 with BeamNG.tech on the same machine.
 
-4. After running the bridge, you can set the IP address of the BeamNG host by calling:
+Important : Versions of ROS2 are usually not inter-compatible, see [Compatibility](#compatibility) for more details.
 
-  ```bash
-  ros2 param set /beamng_bridge host <BEAMNG_ADDRESS>
-  ```
+2. The top section is a list of all vehicles in the simulation.
+The name of each node corresponds to the id of the vehicle in the simulation.
+On each line, you have multiple buttons, respectively :
+- Center the camera on the vehicle
+- Load a configuration file for this vehicle
+- Save the current configuration of the vehicle
+- Start the ROS2 node for this vehicle (or restart if it is already started)
+- Stop the ROS2 node for this vehicle
+When a node is started, the corresponding vehicle line will be highlighted in green.
 
-5. To operate the node, you can use the exposed services, you can find their list in [https://beamngpy.readthedocs.io/en/latest/_static/beamng_msgs/interfaces/service_definitions.html](https://beamngpy.readthedocs.io/en/latest/_static/beamng_msgs/interfaces/service_definitions.html). Getting access to sensor data requires you to launch a scenario using the [StartScenario](https://beamngpy.readthedocs.io/en/latest/_static/beamng_msgs/interfaces/srv/StartScenario.html) service:
+3. Then the second section is a grid of all available sensors that can be added to the vehicle.
+Simply click on the sensor you want to add and it will be added to the vehicle.
 
-  ```bash
-  ros2 service call /beamng_bridge/start_scenario beamng_msgs/srv/StartScenario "{path_to_scenario_definition: '/config/scenarios/example_tech_ground.json'}"
-  ```
+*Note : Changes made to the sensor configuration are not applied until the vehicle node is restarted.*
 
-Using it will start up a node that connects to the simulation and starts up a scenario as defined in the `beamng_ros2/config/scenarios/example_tech_ground.json`.
-Other scenario specifications are available in the same directory.
+4. Then you can find the list of all sensors currently attached to the vehicle.
+You can select a sensor in this list and change its parameters in the fourth section.
+
+5. Finally, on the bottom you may find the parameters of the sensor selected in the third section.
+You can change these parameters to modify the sensor configuration.
+For sensors that have a physical position / rotation on the vehicle, you can also use the visual gizmos on the World Editor view to adjust them.
+*Note : Changes made to the sensor parameters are not applied until the vehicle node is restarted.*
+
 
 ## Compatibility
 
-Running the BeamNG ROS2 integration requires three individual software components, here is a list of compatible versions.
+To work correctly, BeamNG.tech and ROS2 have to be running on the **same machine** and the **same operating system**. Other configurations are not officially supported and may lead to major performance issues.
 
-| BeamNG.tech | BeamNGpy | BeamNG ROS2 Integration |
-|-------------|----------|-------------------------|
-| 0.34        | 1.31     |  1.2.0                  |
-| 0.33        | 1.30     |  1.1.0                  |
-| 0.32        | 1.29     |  1.0.0                  |
+The BeamNG ROS2 integration is compatible with the following ROS2 distributions and operating systems:
+
+| ROS2 Distribution | Windows 10 / 11 | Ubuntu 22.04 | Ubuntu 24.04 | Ubuntu 26.04 |
+|---|---|---|---|---|
+| Humble Hawksbill | Yes | Yes | No | No |
+| Jazzy Jalisco | Yes | Not officially supported | Yes | No |
+| Lyrical Luth | Yes | No | Not officially supported | Yes |
+
+
+**Important : We strongly discourage the use of Windows Subsystem for Linux (WSL) for the BeamNG ROS2 integration due to important performance limitations.**
+
+*Note : Other operating systems may work, but are not officially supported.*
 
 ## Troubleshooting
 
@@ -136,22 +116,21 @@ This section lists common issues with  BeamNG ROS2 Integration in particular. Si
 library is closely tied to BeamNG.tech and thus BeamNG.drive, it is also
 recommended to consult the documentation on BeamNG.drive here:
 
-[https://documentation.beamng.com/][8]
+[https://documentation.beamng.com/][5]
 
 ### Known Issues
 These are issues that we are working on and there is no need to report them:
 
-- Lidar sensor may cause the simulation to crash.
-- The integration is using a single thread causing unoptimal performance.
-  - BeamNGpy is not threadsafe at the moment.
+- Ultrasonic sensor is currently suffering a crashing issue due to a Vulkan issue.
 
 ## Contributions
 
-We always welcome user contributions, be sure to check out our [contribution guidelines][9] first, before starting your work.
+We always welcome user contributions, be sure to check out our [contribution guidelines][6] first, before starting your work.
 
-[1]: https://github.com/BeamNG/BeamNGpy
-[8]: https://documentation.beamng.com/
-[9]: https://github.com/BeamNG/BeamNG-ROS2-Integration/blob/main/CONTRIBUTING.md
+[1]: https://beamng.tech/
+[2]: https://www.ros.org/
+[3]: https://register.beamng.tech/
+[4]: https://github.com/BeamNG/beamng-ros2-integration/releases
+[5]: https://documentation.beamng.com/
+[6]: https://github.com/BeamNG/BeamNG-ROS2-Integration/blob/main/CONTRIBUTING.md
 
-The Python code is formatted using [Black](https://github.com/psf/black), please use it to
-format the code you want to contribute.
