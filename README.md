@@ -20,6 +20,7 @@ For inquiries regarding commercial use, contact us at <licensing@beamng.gmbh>.
     - [Running BeamNG.tech with ROS2](#running-beamngtech-with-ros2)
   - [Usage](#usage)
   - [Compatibility](#compatibility)
+  - [Compiling BeamNG ROS2 Integration](#compiling-beamng-ros2-integration)
   - [Troubleshooting](#troubleshooting)
     - [Known Issues](#known-issues)
   - [Contributions](#contributions)
@@ -109,6 +110,67 @@ The BeamNG ROS2 integration is compatible with the following ROS2 distributions 
 **Important : We strongly discourage the use of Windows Subsystem for Linux (WSL) for the BeamNG ROS2 integration due to important performance limitations.**
 
 *Note : Other operating systems may work, but are not officially supported.*
+
+## Compiling BeamNG ROS2 Integration
+
+Although we provide pre-compiled binaries for the BeamNG ROS2 integration, you can also compile it yourself.
+
+### Windows
+
+#### Prerequisites
+- Visual Studio 2019 x64 Native Tools Command Prompt for VS 2019 with CMake and Python installed
+- ROS2 environment (see [Compatibility](#compatibility) for more details)
+
+#### Steps
+Here are the steps to compile the BeamNG ROS2 integration :
+
+1. Clone the repository :
+```bash
+git clone https://github.com/BeamNG/beamng-ros2-integration.git
+cd beamng-ros2-integration
+git checkout cpp
+```
+
+2. Delete the `build`, `install` and `log` folders if they exist.
+
+2. Start a Visual Studio 2019 x64 Native Tools Command Prompt for VS 2019
+
+3. Source your ROS2 environment as explained in the documentation of your ROS2 distribution.
+
+4. `cd` to the root of the repository and run the following commands :
+```bash
+colcon build --merge-install --packages-select beamng_msgs beamng_ros2
+cd build/beamng_ros2
+cmake --build . --config Release
+```
+
+5. Copy the `.dll` file from `build\beamng_ros2\Release` to the `Bin64` directory of your BeamNG.tech installation.
+
+### Linux
+
+#### Prerequisites
+You will need a few packages to compile the BeamNG ROS2 integration, here is a one liner to install them all on Ubuntu :
+```bash
+apt-get install -y --no-install-recommends locales build-essential cmake git python3-colcon-common-extensions
+```
+
+#### Steps
+Here are the steps to compile the BeamNG ROS2 integration :
+1. Clone the repository :
+```bash
+git clone https://github.com/BeamNG/beamng-ros2-integration.git
+cd beamng-ros2-integration
+git checkout cpp
+```
+2. Delete the `build`, `install` and `log` folders if they exist.
+3. `cd` to the root of the repository and run the following commands :
+```bash
+colcon build --merge-install --packages-select beamng_msgs beamng_ros2
+cd build/beamng_ros2
+cmake --build . --config Release
+```
+4. Copy the `.so` file from `build\beamng_ros2\Release` to the `BinLinux` directory of your BeamNG.tech installation.
+
 
 ## Troubleshooting
 
