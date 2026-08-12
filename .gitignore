@@ -170,3 +170,4 @@ docs_*
 
 /docs/production
 *.code-workspace
+/.vscode

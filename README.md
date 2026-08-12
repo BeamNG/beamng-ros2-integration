@@ -29,6 +29,15 @@ For inquiries regarding commercial use, contact us at <licensing@beamng.gmbh>.
 
 The BeamNG ROS2 integration includes support for the **remote** control of the simulation platform, attaching sensors to vehicles (using scenario files), and getting the sensor data from vehicles.
 
+### Python bridge vs. C++ bridge
+
+There are two ways to connect BeamNG.tech to ROS 2:
+
+- **Python bridge** (this branch): a standalone ROS 2 node (`beamng_bridge`) that connects to BeamNG.tech over the BeamNGpy socket. It supports remote setups, scenario/sensor configuration via JSON files and ROS 2 services, cosimulation, and the teleoperation examples described below.
+- **C++ bridge** (the [`cpp`](https://github.com/BeamNG/beamng-ros2-integration/tree/cpp) branch): a native BeamNG.tech plugin (`.dll`/`.so`) that runs inside the simulator and is configured through an in-game **ROS2 Editor** in the World Editor. It targets high-performance, low-latency sensor streaming and requires BeamNG.tech and ROS 2 to run on the same machine and OS.
+
+For the C++ bridge, see the [C++ Bridge and ROS2 Editor](https://documentation.beamng.com/api/ros2/main/beamng_ros2/user_docs/cpp_bridge.html) documentation.
+
 <a name="prereqs"></a>
 
 ## Prerequisites

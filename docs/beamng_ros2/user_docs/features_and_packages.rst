@@ -8,6 +8,14 @@ want to know where functionality lives in the repository.
 Throughout this page, ``<ROS2_WORKSPACE>`` refers to the root of your ROS 2
 colcon workspace (for example ``~/ros2_ws``).
 
+.. note::
+
+   This page describes the **Python bridge**, which runs as a standalone ROS 2
+   node and connects to BeamNG.tech over the BeamNGpy socket. BeamNG.tech also
+   ships a **native C++ integration** that runs inside the simulator and is
+   configured through the in-game *ROS2 Editor*. See :doc:`cpp_bridge` for
+   details on that variant.
+
 Feature overview
 ----------------
 
