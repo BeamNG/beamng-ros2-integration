@@ -1,8 +1,13 @@
 Changelog
 =========
 
+Version 1.6.0
+-------------
+- Updated compatibility for BeamNG.tech 0.39 and BeamNGpy 1.36.
+- Added ROS2 CPP bridge to in-Simulation ROS2 CPP editor in cpp branch.
+
 Version 1.5.0
-----------
+-------------
 - Updated README for consistent ROS 2 terminology and clearer getting-started guidance.
 - Restructured setup documentation to cover general setup, vehicle teleoperation (ETK800 example), and drone teleoperation.
 - Added dedicated bridge startup example to the setup documentation and reduced duplication between sections.
