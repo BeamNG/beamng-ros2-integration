@@ -32,7 +32,9 @@ struct BngControlView {
     int32_t gear;
 };
 
-BNG_ROS2_API char bngros2_init_vehicle_node(uint32_t id, const char* name);
+BNG_ROS2_API void bngros2_ros_init(void);
+
+BNG_ROS2_API int bngros2_init_vehicle_node(uint32_t id, const char* name);
 BNG_ROS2_API void bngros2_destroy_vehicle_node(uint32_t id);
 BNG_ROS2_API void bngros2_destroy_all_vehicle_nodes(void);
 BNG_ROS2_API void* bngros2_get_vehicle_handle(uint32_t id);
