@@ -1,6 +1,11 @@
 Changelog
 =========
 
+Version 1.7.0
+-------------
+- Updated compatibility for BeamNG.tech 0.40 and BeamNGpy 1.37.
+- Added Lua and Python APIs to control the C++ ROS2 bridge on the cpp branch.
+
 Version 1.6.0
 -------------
 - Updated compatibility for BeamNG.tech 0.39 and BeamNGpy 1.36.
